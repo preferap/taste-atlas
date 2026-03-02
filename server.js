@@ -152,6 +152,7 @@ async function searchMovieCandidates(query) {
     title: movie.title,
     subtitle: `${movie.release_date || "n/a"} · ${movie.original_title || ""}`,
     posterUrl: tmdbImageUrl(movie.poster_path, "w185"),
+    _popularity: Number(movie.popularity || 0),
   }));
 
   const directorCandidates = (personData?.results || [])
@@ -163,24 +164,24 @@ async function searchMovieCandidates(query) {
       title: person.name,
       subtitle: `Director · ${person.known_for?.map((item) => item.title).filter(Boolean).join(", ") || "known works"}`,
       posterUrl: tmdbImageUrl(person.profile_path, "w185"),
+      _popularity: Number(person.popularity || 0),
     }));
 
+  const rankedMovie = rankCandidatesByRelevance(movieCandidates, query, (c) => c._popularity || 0);
+  const rankedDirector = rankCandidatesByRelevance(
+    directorCandidates,
+    query,
+    (c) => c._popularity || 0
+  );
   const qn = normalizeText(query);
-  const directorMatch = directorCandidates.some(
-    (candidate) =>
-      normalizeText(candidate.title).includes(qn) ||
-      normalizeText(candidate.subtitle).includes(qn)
-  );
-  const movieMatch = movieCandidates.some(
-    (candidate) =>
-      normalizeText(candidate.title).includes(qn) ||
-      normalizeText(candidate.subtitle).includes(qn)
-  );
-  const prioritizeDirector = directorMatch || (!movieMatch && directorCandidates.length > 0);
+  const directorMatch = rankedDirector.some((candidate) => candidate._matchScore > 0);
+  const movieMatch = rankedMovie.some((candidate) => candidate._matchScore > 0);
+  const prioritizeDirector = directorMatch || (!movieMatch && rankedDirector.length > 0);
   const ordered = prioritizeDirector
-    ? [...directorCandidates, ...movieCandidates]
-    : [...movieCandidates, ...directorCandidates];
-  return dedupeCandidates(ordered);
+    ? [...rankedDirector, ...rankedMovie]
+    : [...rankedMovie, ...rankedDirector];
+  const cleaned = ordered.map(({ _popularity, _matchScore, _extraScore, ...candidate }) => candidate);
+  return dedupeCandidates(cleaned);
 }
 
 async function searchMusicCandidates(query) {
@@ -219,6 +220,7 @@ async function searchMusicCandidates(query) {
       title: artist.name,
       subtitle: `${artist.country || "n/a"} · ${artist.disambiguation || "artist"}`,
       posterUrl: "",
+      _score: Number(artist.score || 0),
     }));
 
     const releaseCandidates = (releaseData?.["release-groups"] || [])
@@ -231,9 +233,19 @@ async function searchMusicCandidates(query) {
           release["artist-credit"]?.[0]?.name || "unknown"
         }`,
         posterUrl: coverArtUrl(release.id),
+        _score: Number(release.score || 0),
       }));
 
-    return dedupeCandidates([...artistCandidates, ...releaseCandidates]);
+    const rankedArtist = rankCandidatesByRelevance(artistCandidates, query, (c) => c._score || 0);
+    const rankedRelease = rankCandidatesByRelevance(
+      releaseCandidates,
+      query,
+      (c) => c._score || 0
+    );
+    const ordered = [...rankedArtist, ...rankedRelease].map(
+      ({ _score, _matchScore, _extraScore, ...candidate }) => candidate
+    );
+    return dedupeCandidates(ordered);
   } catch (_error) {
     return [
       {
@@ -777,6 +789,49 @@ function dedupeCandidates(items) {
     seen.add(key);
     return true;
   });
+}
+
+function rankCandidatesByRelevance(items, query, extraScoreFn = () => 0) {
+  const qn = normalizeText(query);
+  const tokens = qn.split(/\s+/).filter(Boolean);
+  return [...items]
+    .map((item) => {
+      const title = normalizeText(item.title);
+      const subtitle = normalizeText(item.subtitle);
+      let matchScore = 0;
+      if (title === qn) {
+        matchScore += 1000;
+      }
+      if (title.startsWith(qn)) {
+        matchScore += 700;
+      }
+      if (title.includes(qn)) {
+        matchScore += 400;
+      }
+      if (subtitle.includes(qn)) {
+        matchScore += 160;
+      }
+      tokens.forEach((token) => {
+        if (title.includes(token)) {
+          matchScore += 90;
+        }
+        if (subtitle.includes(token)) {
+          matchScore += 30;
+        }
+      });
+      const extraScore = Number(extraScoreFn(item) || 0);
+      return {
+        ...item,
+        _matchScore: matchScore,
+        _extraScore: extraScore,
+      };
+    })
+    .sort((a, b) => {
+      if (b._matchScore !== a._matchScore) {
+        return b._matchScore - a._matchScore;
+      }
+      return b._extraScore - a._extraScore;
+    });
 }
 
 function normalizeText(value) {
