@@ -1,0 +1,161 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: #666666;
+  --line: #d9d9d9;
+  --panel: #fcfcfc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Helvetica Neue", Helvetica, Arial, "Pretendard", sans-serif;
+}
+
+.site-header,
+.site-footer {
+  padding: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.site-header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr 360px;
+  gap: 16px;
+  padding: 16px;
+  min-height: calc(100vh - 150px);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  border: 1px solid var(--fg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--fg);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f2f2f2;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 8px 12px;
+  border-color: var(--line);
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background-image: linear-gradient(#fafafa, #ffffff);
+}
+
+.archive-card h3 {
+  margin: 0 0 8px;
+}
+
+.badge {
+  display: inline-block;
+  margin: 0 0 10px;
+  border: 1px solid var(--fg);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.hidden {
+  display: none;
+}
+
+ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  #map {
+    min-height: 420px;
+  }
+}
