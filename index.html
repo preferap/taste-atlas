@@ -14,67 +14,33 @@
   <body>
     <header class="site-header">
       <h1>Taste Atlas</h1>
-      <p>내 취향을 지식지도로 펼치는 아카이브</p>
+      <p>취향을 지식지도로 학습하는 아카이브</p>
+      <nav class="top-nav">
+        <a href="./map.html">Map</a>
+        <a href="./archive.html">Archive</a>
+        <a href="./pathways.html">Pathways</a>
+      </nav>
     </header>
 
-    <main class="layout">
-      <section class="panel input-panel">
-        <h2>Seed Your Taste</h2>
-        <p class="muted">좋아하는 음악/영화를 입력하면 지도에 노드를 추가합니다.</p>
-        <p id="source-status" class="status">Checking data sources...</p>
-
-        <form id="taste-form">
-          <label for="type">Type</label>
-          <select id="type" name="type">
-            <option value="music">Music</option>
-            <option value="movie">Movie</option>
-          </select>
-
-          <label for="title">Title</label>
-          <input id="title" name="title" placeholder="예: Pulp Fiction / Radiohead" />
-
-          <button type="submit">Add to Map (Live API)</button>
-        </form>
-
-        <div class="chips">
-          <button class="chip" data-seed="pulp-fiction">Pulp Fiction</button>
-          <button class="chip" data-seed="hitchcock">Alfred Hitchcock</button>
-          <button class="chip" data-seed="radiohead">Radiohead</button>
-          <button class="chip" data-seed="shoegaze">Shoegaze</button>
+    <main class="home-main">
+      <section class="panel hero-panel">
+        <h2>MVP Check Flow</h2>
+        <ol>
+          <li>Map에서 음악/영화를 검색해 시드 노드를 만든다.</li>
+          <li>노드를 클릭하고 Expand Connections로 가지를 확장한다.</li>
+          <li>Archive에서 전체 노드를 점검한다.</li>
+          <li>Pathways에서 학습 순서를 확인한다.</li>
+        </ol>
+        <div class="hero-links">
+          <a href="./map.html" class="cta-link">Start Map</a>
+          <a href="./archive.html" class="cta-link">View Archive</a>
+          <a href="./pathways.html" class="cta-link">View Pathways</a>
         </div>
-      </section>
-
-      <section class="panel map-panel">
-        <div class="panel-head">
-          <h2>Knowledge Map</h2>
-          <div class="panel-actions">
-            <span class="muted" id="node-count">0 nodes</span>
-            <button id="reset-map" type="button" class="ghost-button">Reset</button>
-          </div>
-        </div>
-        <svg id="map" viewBox="0 0 900 560" aria-label="knowledge map"></svg>
-      </section>
-
-      <section class="panel archive-panel">
-        <h2>Archive</h2>
-        <div id="archive-empty" class="muted">노드를 클릭하면 상세 맥락이 보입니다.</div>
-        <article id="archive-card" class="archive-card hidden">
-          <h3 id="archive-title"></h3>
-          <p id="archive-type" class="badge"></p>
-          <p id="archive-desc"></p>
-          <button id="expand-node" type="button">Expand Connections</button>
-          <h4>Study Path</h4>
-          <ul id="archive-path"></ul>
-          <h4>Connected To</h4>
-          <ul id="archive-links"></ul>
-        </article>
       </section>
     </main>
 
     <footer class="site-footer">
       <small>White/Black minimal UI · English: Helvetica · Korean: Pretendard</small>
     </footer>
-
-    <script src="./app.js"></script>
   </body>
 </html>

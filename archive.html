@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Taste Atlas - Archive</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Taste Atlas</h1>
+      <p>Saved node archive</p>
+      <nav class="top-nav">
+        <a href="./index.html">Home</a>
+        <a href="./map.html">Map</a>
+        <a href="./archive.html" class="active">Archive</a>
+        <a href="./pathways.html">Pathways</a>
+      </nav>
+    </header>
+
+    <main class="single-page">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>All Nodes</h2>
+          <span id="archive-count" class="muted">0 items</span>
+        </div>
+        <div id="archive-empty-text" class="muted">Map 페이지에서 먼저 노드를 생성하세요.</div>
+        <ul id="archive-list" class="archive-list"></ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <small>White/Black minimal UI · English: Helvetica · Korean: Pretendard</small>
+    </footer>
+    <script src="./archive.js"></script>
+  </body>
+</html>

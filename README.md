@@ -8,7 +8,8 @@ Music source is now `MusicBrainz + Wikidata + Wikipedia` (no Spotify required).
 - Stage 1 done: base map UI + node archive view
 - Stage 2 done: live lookup API for music/movie
 - Stage 3 done: expand selected node into connected concept nodes
-- Next stage: refine graph layout + dedicated archive/pathways pages
+- Stage 4 done: dedicated `Home / Map / Archive / Pathways` pages
+- Next stage: refine graph layout and improve pathway ranking logic
 
 ## Run
 
