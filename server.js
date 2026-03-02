@@ -460,6 +460,7 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   let artistId = "";
   let sourceKind = candidateKind || "artist";
   let posterUrl = "";
+  let selectedRelease = null;
 
   if (candidateId && candidateKind === "artist") {
     artistId = candidateId;
@@ -467,6 +468,7 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
 
   if (candidateId && candidateKind === "release") {
     const releaseDetail = await fetchMusicBrainzReleaseGroup(candidateId);
+    selectedRelease = releaseDetail;
     const artistCredit = releaseDetail?.["artist-credit"]?.[0]?.artist;
     if (artistCredit?.id) {
       artistId = artistCredit.id;
@@ -477,10 +479,16 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
 
   if (!artistId) {
     const candidates = await searchMusicCandidates(q);
-    const firstArtist = candidates.find((candidate) => candidate.kind === "artist");
-    if (firstArtist) {
-      artistId = firstArtist.id;
+    const first = candidates[0];
+    if (first?.kind === "artist") {
+      artistId = first.id;
       sourceKind = "artist";
+    } else if (first?.kind === "release") {
+      const releaseDetail = await fetchMusicBrainzReleaseGroup(first.id);
+      selectedRelease = releaseDetail;
+      artistId = releaseDetail?.["artist-credit"]?.[0]?.artist?.id || "";
+      sourceKind = "release";
+      posterUrl = coverArtUrl(first.id);
     }
   }
 
@@ -530,31 +538,73 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   const wikidataDesc = await fetchWikidataDescription(detail?.relations);
   const tagNames = (detail?.tags || []).slice(0, 10).map((tag) => tag.name);
   const { awards } = await fetchWikidataMetaFromRelations(detail?.relations);
+  const topReleases = await fetchMusicBrainzReleaseGroupsByArtist(artistId);
+  const artistName = detail.name;
+  const releaseNodeTitle = selectedRelease?.title || "";
+  const releaseArtistName =
+    selectedRelease?.["artist-credit"]?.map((credit) => credit.name).filter(Boolean).join(", ") ||
+    artistName;
 
   const profileItems = [
-    { label: `Artist: ${detail.name}`, url: buildKnowledgeUrl(detail.name) },
+    {
+      label: `Artist: ${artistName}`,
+      url: buildKnowledgeUrl(artistName),
+    },
     { label: `Country: ${detail.country || "n/a"}`, url: "" },
     { label: `Disambiguation: ${detail.disambiguation || "n/a"}`, url: "" },
     { label: `Source kind: ${sourceKind}`, url: "" },
+    ...(selectedRelease
+      ? [
+          {
+            label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
+            url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
+          },
+          {
+            label: `Release Artist: ${releaseArtistName || "n/a"}`,
+            url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
+          },
+          {
+            label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
+            url: "",
+          },
+        ]
+      : []),
   ];
 
   const genreItems = tagNames.map((tag) => ({ label: tag, url: buildKnowledgeUrl(tag) }));
+  const releaseItems = topReleases.slice(0, 8).map((release) => ({
+    label: `${release.title} (${release["first-release-date"] || "n/a"})`,
+    url: buildKnowledgeUrl(release.title),
+  }));
   const signatureItems = [
-    { label: firstSentence(wikiSummary || wikidataDesc || "Artist signature data is limited."), url: buildKnowledgeUrl(detail.name) },
+    {
+      label: buildAcademicArtistSignature({
+        artistName,
+        summary: wikiSummary || wikidataDesc,
+      }),
+      url: "",
+    },
   ];
   const awardItems = awards.length
     ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
     : [{ label: "No award records found in open data.", url: "" }];
 
   return {
-    title: detail.name,
+    title: selectedRelease ? releaseNodeTitle || artistName : artistName,
     type: "music",
     desc:
+      (selectedRelease
+        ? `${releaseNodeTitle || artistName} by ${releaseArtistName}. ${
+            selectedRelease["first-release-date"]
+              ? `Released on ${selectedRelease["first-release-date"]}.`
+              : ""
+          }`
+        : "") ||
       wikiSummary ||
       wikidataDesc ||
-      `${detail.name} is linked with ${tagNames.slice(0, 3).join(", ") || "multiple genres"}.`,
+      `${artistName} is linked with ${tagNames.slice(0, 3).join(", ") || "multiple genres"}.`,
     path: [
-      `${detail.name} 대표작 확인`,
+      `${artistName} 대표작 확인`,
       `장르 ${tagNames.slice(0, 2).join(" / ") || "분석"} 공부`,
       "연결 씬/아티스트 비교",
     ],
@@ -566,8 +616,9 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     connectedSections: [
       { title: "1) Profile", items: profileItems },
       { title: "2) Genres", items: genreItems.slice(0, 12) },
-      { title: "3) Artist Signatures", items: signatureItems },
-      { title: "4) Awards", items: awardItems.slice(0, 20) },
+      { title: "3) Discography Highlights", items: releaseItems },
+      { title: "4) Artist Signatures", items: signatureItems },
+      { title: "5) Awards", items: awardItems.slice(0, 20) },
     ],
     posterUrl,
   };
@@ -695,6 +746,27 @@ async function fetchMusicBrainzReleaseGroup(releaseId) {
   return response.json();
 }
 
+async function fetchMusicBrainzReleaseGroupsByArtist(artistId) {
+  if (!artistId) {
+    return [];
+  }
+  const url =
+    "https://musicbrainz.org/ws/2/release-group/?" +
+    new URLSearchParams({
+      artist: artistId,
+      fmt: "json",
+      limit: "12",
+    });
+  const response = await fetch(url, {
+    headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const data = await response.json();
+  return Array.isArray(data?.["release-groups"]) ? data["release-groups"] : [];
+}
+
 function dedupeCandidates(items) {
   const seen = new Set();
   return items.filter((item) => {
@@ -739,6 +811,11 @@ function firstSentence(text) {
   }
   const [head] = String(text).split(/(?<=[.!?])\s+/);
   return head || text;
+}
+
+function buildAcademicArtistSignature({ artistName, summary }) {
+  const base = firstSentence(summary) || `${artistName}는 동시대 대중음악 담론에서 중요한 참조점으로 호출된다.`;
+  return `${base} 이 아티스트의 미학은 장르의 경계를 고정하기보다 사운드 문법을 갱신하는 방식으로 작동한다. 평단은 작품 간 연속성과 단절의 배치를 통해 시대적 감수성을 조직한다는 점을 주목한다. 따라서 학습 과정에서는 대표작 단위가 아니라 시기별 앨범군의 변화를 구조적으로 읽는 접근이 적절하다.`;
 }
 
 async function buildDirectorSignatureProfile({

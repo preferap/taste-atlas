@@ -10,6 +10,7 @@ Music source is now `MusicBrainz + Wikidata + Wikipedia` (no Spotify required).
 - Stage 3 done: candidate selection flow for duplicate names
 - Stage 4 done: split search results into `콘텐츠 / 사람`
 - Next stage: music result detail tuning
+- Next stage: music detail fine-tuning and optional 3D node map
 
 ## Run
 
