@@ -3,6 +3,13 @@
 Minimal portfolio prototype for building a personal taste knowledge map across music and movies.
 Music source is now `MusicBrainz + Wikidata + Wikipedia` (no Spotify required).
 
+## Current Stage
+
+- Stage 1 done: base map UI + node archive view
+- Stage 2 done: live lookup API for music/movie
+- Stage 3 done: expand selected node into connected concept nodes
+- Next stage: refine graph layout + dedicated archive/pathways pages
+
 ## Run
 
 ```bash
@@ -19,6 +26,8 @@ Open `http://localhost:5500`.
 - `GET /api/health`: source key status
 - `GET /api/lookup?type=music&q=radiohead`
 - `GET /api/lookup?type=movie&q=pulp%20fiction`
+- `GET /api/expand?type=music&q=radiohead`
+- `GET /api/expand?type=movie&q=pulp%20fiction`
 
 ## Keys
 

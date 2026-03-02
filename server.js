@@ -48,6 +48,31 @@ app.get("/api/lookup", async (req, res) => {
   }
 });
 
+app.get("/api/expand", async (req, res) => {
+  const type = String(req.query.type || "").trim();
+  const q = String(req.query.q || "").trim();
+
+  if (!type || !q) {
+    return res.status(400).json({ error: "Missing query: type and q are required." });
+  }
+
+  try {
+    if (type === "music") {
+      const nodes = await expandMusic(q);
+      return res.json({ nodes });
+    }
+    if (type === "movie") {
+      const nodes = await expandMovie(q);
+      return res.json({ nodes });
+    }
+    return res.json({ nodes: [] });
+  } catch (error) {
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Taste Atlas server running at http://localhost:${port}`);
 });
@@ -211,6 +236,143 @@ async function lookupMovie(query) {
       "Source: TMDB",
     ],
   };
+}
+
+async function expandMusic(query) {
+  const searchUrl =
+    "https://musicbrainz.org/ws/2/artist/?" +
+    new URLSearchParams({
+      query,
+      fmt: "json",
+      limit: "1",
+    });
+
+  const searchResponse = await fetch(searchUrl, {
+    headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
+  });
+  if (!searchResponse.ok) {
+    throw new Error(`MusicBrainz search failed (${searchResponse.status}).`);
+  }
+
+  const searchData = await searchResponse.json();
+  const artist = searchData?.artists?.[0];
+  if (!artist?.id) {
+    return [];
+  }
+
+  const detailUrl =
+    `https://musicbrainz.org/ws/2/artist/${artist.id}?` +
+    new URLSearchParams({
+      inc: "tags+url-rels",
+      fmt: "json",
+    });
+  const detailResponse = await fetch(detailUrl, {
+    headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
+  });
+  if (!detailResponse.ok) {
+    throw new Error(`MusicBrainz detail failed (${detailResponse.status}).`);
+  }
+  const detail = await detailResponse.json();
+
+  const tagNodes = (detail?.tags || []).slice(0, 6).map((tag) => ({
+    title: tag.name,
+    type: "concept",
+    desc: `${artist.name}와 연결된 음악 태그.`,
+    path: [`${tag.name} 장르/태그 기원 탐색`, `${artist.name}와 연관된 작품 비교`],
+    links: ["Source: MusicBrainz tag"],
+  }));
+
+  const contextNodes = [];
+  if (detail?.country) {
+    contextNodes.push({
+      title: detail.country,
+      type: "concept",
+      desc: `${artist.name}의 활동 국가 코드.`,
+      path: ["해당 국가 음악 씬 조사", "동시대 아티스트 비교"],
+      links: ["Source: MusicBrainz country"],
+    });
+  }
+
+  return [...tagNodes, ...contextNodes];
+}
+
+async function expandMovie(query) {
+  if (!process.env.TMDB_API_KEY) {
+    return [
+      {
+        title: "TMDB key needed",
+        type: "concept",
+        desc: "TMDB_API_KEY 설정 후 영화 확장 기능이 활성화됩니다.",
+        path: ["TMDB API 키 발급", ".env에 TMDB_API_KEY 추가"],
+        links: [],
+      },
+    ];
+  }
+
+  const searchUrl =
+    "https://api.themoviedb.org/3/search/movie?" +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      query,
+      language: "en-US",
+      include_adult: "false",
+      page: "1",
+    });
+  const searchResponse = await fetch(searchUrl);
+  if (!searchResponse.ok) {
+    throw new Error(`TMDB search failed (${searchResponse.status}).`);
+  }
+  const searchData = await searchResponse.json();
+  const movie = searchData?.results?.[0];
+  if (!movie?.id) {
+    return [];
+  }
+
+  const detailUrl =
+    `https://api.themoviedb.org/3/movie/${movie.id}?` +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      language: "en-US",
+    });
+  const creditUrl =
+    `https://api.themoviedb.org/3/movie/${movie.id}/credits?` +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      language: "en-US",
+    });
+
+  const [detailResponse, creditResponse] = await Promise.all([
+    fetch(detailUrl),
+    fetch(creditUrl),
+  ]);
+  if (!detailResponse.ok || !creditResponse.ok) {
+    throw new Error("TMDB detail/credits failed.");
+  }
+  const detail = await detailResponse.json();
+  const credit = await creditResponse.json();
+
+  const director = credit?.crew?.find((person) => person.job === "Director");
+  const genreNodes = (detail?.genres || []).slice(0, 6).map((genre) => ({
+    title: genre.name,
+    type: "concept",
+    desc: `${detail.title}의 장르 연결 노드`,
+    path: [`${genre.name}의 역사 조사`, "대표 영화 리스트 정리"],
+    links: ["Source: TMDB genre"],
+  }));
+
+  const directorNode = director
+    ? [
+        {
+          title: director.name,
+          type: "person",
+          desc: `${detail.title}의 감독`,
+          path: [`${director.name} 필모그래피 조사`, "연출 스타일 특징 정리"],
+          links: ["Source: TMDB credits"],
+        },
+      ]
+    : [];
+
+  return [...directorNode, ...genreNodes];
 }
 
 async function fetchWikipediaSummary(title) {

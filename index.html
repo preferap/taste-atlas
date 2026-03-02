@@ -47,7 +47,10 @@
       <section class="panel map-panel">
         <div class="panel-head">
           <h2>Knowledge Map</h2>
-          <span class="muted" id="node-count">0 nodes</span>
+          <div class="panel-actions">
+            <span class="muted" id="node-count">0 nodes</span>
+            <button id="reset-map" type="button" class="ghost-button">Reset</button>
+          </div>
         </div>
         <svg id="map" viewBox="0 0 900 560" aria-label="knowledge map"></svg>
       </section>
@@ -59,6 +62,7 @@
           <h3 id="archive-title"></h3>
           <p id="archive-type" class="badge"></p>
           <p id="archive-desc"></p>
+          <button id="expand-node" type="button">Expand Connections</button>
           <h4>Study Path</h4>
           <ul id="archive-path"></ul>
           <h4>Connected To</h4>

@@ -9,9 +9,15 @@ const archiveDescEl = document.getElementById("archive-desc");
 const archivePathEl = document.getElementById("archive-path");
 const archiveLinksEl = document.getElementById("archive-links");
 const sourceStatusEl = document.getElementById("source-status");
+const expandNodeEl = document.getElementById("expand-node");
+const resetMapEl = document.getElementById("reset-map");
 
 const nodes = [];
 const edges = [];
+let selectedNodeId = null;
+let nodeSerial = 0;
+
+const GRAPH_STORAGE_KEY = "taste-atlas-graph-v1";
 
 const seedDb = {
   "pulp-fiction": {
@@ -50,17 +56,90 @@ function randomPoint() {
   return { x, y };
 }
 
-function addNode(node) {
-  const id = `node-${nodes.length + 1}`;
-  const point = randomPoint();
-  nodes.push({ id, ...node, ...point });
+function nextNodeId() {
+  nodeSerial += 1;
+  return `node-${Date.now()}-${nodeSerial}`;
+}
 
-  if (nodes.length > 1) {
-    const target = nodes[Math.floor(Math.random() * (nodes.length - 1))];
-    edges.push({ from: id, to: target.id });
+function normalizeTitle(title) {
+  return String(title || "").trim().toLowerCase();
+}
+
+function findNodeByIdentity(title, type) {
+  const normalizedTitle = normalizeTitle(title);
+  return nodes.find(
+    (node) => normalizeTitle(node.title) === normalizedTitle && node.type === type
+  );
+}
+
+function addEdge(from, to) {
+  const exists = edges.some((edge) => edge.from === from && edge.to === to);
+  if (!exists) {
+    edges.push({ from, to });
+  }
+}
+
+function persistGraph() {
+  const payload = {
+    nodes,
+    edges,
+    selectedNodeId,
+    nodeSerial,
+  };
+  window.localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function restoreGraph() {
+  const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
+  if (!raw) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+      return false;
+    }
+    nodes.splice(0, nodes.length, ...parsed.nodes);
+    edges.splice(0, edges.length, ...parsed.edges);
+    selectedNodeId = parsed.selectedNodeId || null;
+    nodeSerial = parsed.nodeSerial || nodes.length;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function addNode(node, options = {}) {
+  const existing = findNodeByIdentity(node.title, node.type);
+  const linkToId = options.linkToId || null;
+
+  if (existing) {
+    if (linkToId && existing.id !== linkToId) {
+      addEdge(linkToId, existing.id);
+    }
+    render();
+    persistGraph();
+    return existing;
+  }
+
+  const id = nextNodeId();
+  const point = randomPoint();
+  const newNode = { id, ...node, ...point };
+  nodes.push(newNode);
+
+  if (linkToId && linkToId !== id) {
+    addEdge(linkToId, id);
+  } else if (nodes.length > 1) {
+    const candidates = nodes.filter((item) => item.id !== id);
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    if (target) {
+      addEdge(id, target.id);
+    }
   }
 
   render();
+  persistGraph();
+  return newNode;
 }
 
 function render() {
@@ -90,9 +169,9 @@ function render() {
     circle.setAttribute("cx", node.x);
     circle.setAttribute("cy", node.y);
     circle.setAttribute("r", "26");
-    circle.setAttribute("fill", "#ffffff");
+    circle.setAttribute("fill", node.id === selectedNodeId ? "#f1f1f1" : "#ffffff");
     circle.setAttribute("stroke", "#0a0a0a");
-    circle.setAttribute("stroke-width", "2");
+    circle.setAttribute("stroke-width", node.id === selectedNodeId ? "3" : "2");
     circle.style.cursor = "pointer";
 
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -113,6 +192,8 @@ function render() {
 }
 
 function openArchive(node) {
+  selectedNodeId = node.id;
+  render();
   archiveEmptyEl.classList.add("hidden");
   archiveCardEl.classList.remove("hidden");
   archiveTitleEl.textContent = node.title;
@@ -132,6 +213,7 @@ function openArchive(node) {
     li.textContent = link;
     archiveLinksEl.appendChild(li);
   });
+  persistGraph();
 }
 
 formEl.addEventListener("submit", async (event) => {
@@ -153,16 +235,18 @@ formEl.addEventListener("submit", async (event) => {
       throw new Error(`Lookup failed (${response.status})`);
     }
     const data = await response.json();
-    addNode(data.node);
+    const added = addNode(data.node);
+    openArchive(added);
     sourceStatusEl.textContent = "Live API node added.";
   } catch (_error) {
-    addNode({
+    const fallback = addNode({
       title,
       type,
       desc: "Live API failed. Local fallback node added.",
       path: ["API 키 확인", "데이터 소스 연결", "지식지도 확장"],
       links: [],
     });
+    openArchive(fallback);
     sourceStatusEl.textContent = "API failed, fallback node added.";
   }
   formEl.reset();
@@ -172,8 +256,60 @@ document.querySelectorAll(".chip").forEach((chip) => {
   chip.addEventListener("click", () => {
     const key = chip.getAttribute("data-seed");
     const seed = seedDb[key];
-    if (seed) addNode(seed);
+    if (!seed) {
+      return;
+    }
+    const added = addNode(seed);
+    openArchive(added);
   });
+});
+
+expandNodeEl.addEventListener("click", async () => {
+  if (!selectedNodeId) {
+    sourceStatusEl.textContent = "Select a node first.";
+    return;
+  }
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  if (!selectedNode) {
+    sourceStatusEl.textContent = "Selected node not found.";
+    return;
+  }
+
+  sourceStatusEl.textContent = "Expanding selected node...";
+  try {
+    const response = await fetch(
+      `/api/expand?type=${encodeURIComponent(selectedNode.type)}&q=${encodeURIComponent(
+        selectedNode.title
+      )}`
+    );
+    if (!response.ok) {
+      throw new Error(`Expand failed (${response.status})`);
+    }
+    const data = await response.json();
+    const expandedNodes = Array.isArray(data.nodes) ? data.nodes : [];
+    expandedNodes.forEach((node) => {
+      addNode(node, { linkToId: selectedNode.id });
+    });
+    sourceStatusEl.textContent = `Expanded ${expandedNodes.length} connected nodes.`;
+  } catch (_error) {
+    sourceStatusEl.textContent = "Expand failed. Check API/network.";
+  }
+});
+
+resetMapEl.addEventListener("click", () => {
+  const confirmed = window.confirm("Reset current map?");
+  if (!confirmed) {
+    return;
+  }
+  nodes.splice(0, nodes.length);
+  edges.splice(0, edges.length);
+  selectedNodeId = null;
+  nodeSerial = 0;
+  window.localStorage.removeItem(GRAPH_STORAGE_KEY);
+  archiveCardEl.classList.add("hidden");
+  archiveEmptyEl.classList.remove("hidden");
+  render();
+  sourceStatusEl.textContent = "Map reset complete.";
 });
 
 async function checkSourceHealth() {
@@ -191,5 +327,14 @@ async function checkSourceHealth() {
   }
 }
 
-["pulp-fiction", "radiohead", "hitchcock"].forEach((seed) => addNode(seedDb[seed]));
+if (!restoreGraph()) {
+  ["pulp-fiction", "radiohead", "hitchcock"].forEach((seed) => addNode(seedDb[seed]));
+}
+render();
+if (selectedNodeId) {
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  if (selectedNode) {
+    openArchive(selectedNode);
+  }
+}
 checkSourceHealth();
