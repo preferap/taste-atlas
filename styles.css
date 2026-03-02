@@ -258,6 +258,26 @@ ul {
   margin: 0 0 8px;
 }
 
+.connected-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.connected-group h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.connected-group ul {
+  margin: 0;
+}
+
+.connected-group a {
+  color: var(--fg);
+}
+
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: 1fr;

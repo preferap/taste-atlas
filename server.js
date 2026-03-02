@@ -154,36 +154,66 @@ async function lookupMovie(query) {
       title: query,
       type: "movie",
       desc: "TMDB_API_KEY missing. Add key to .env first.",
-      path: ["TMDB 키 연결", "감독/장르 정보 보강", "영향 관계 그래프 확장"],
+      path: [],
       links: [],
+      connectedSections: [],
     };
   }
 
-  const searchUrl =
+  const movieSearchUrl =
     "https://api.themoviedb.org/3/search/movie?" +
     new URLSearchParams({
       api_key: process.env.TMDB_API_KEY,
       query,
-      language: "en-US",
+      language: "ko-KR",
+      include_adult: "false",
+      page: "1",
+    });
+  const personSearchUrl =
+    "https://api.themoviedb.org/3/search/person?" +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      query,
+      language: "ko-KR",
       include_adult: "false",
       page: "1",
     });
 
-  const searchResponse = await fetch(searchUrl);
-  if (!searchResponse.ok) {
-    throw new Error(`TMDB search failed (${searchResponse.status}).`);
+  const [movieSearchResponse, personSearchResponse] = await Promise.all([
+    fetch(movieSearchUrl),
+    fetch(personSearchUrl),
+  ]);
+  if (!movieSearchResponse.ok || !personSearchResponse.ok) {
+    throw new Error(`TMDB search failed (${movieSearchResponse.status}).`);
   }
 
-  const searchData = await searchResponse.json();
-  const movie = searchData?.results?.[0];
+  const movieSearchData = await movieSearchResponse.json();
+  const personSearchData = await personSearchResponse.json();
+  const movieByTitle = movieSearchData?.results?.[0];
+  const directorPerson = (personSearchData?.results || []).find(
+    (person) => person.known_for_department === "Directing"
+  );
 
-  if (!movie) {
+  const queryNormalized = normalizeText(query);
+  const isDirectorNameQuery =
+    directorPerson && normalizeText(directorPerson.name) === queryNormalized;
+
+  let movie = movieByTitle;
+  let searchMode = "title";
+
+  if ((!movie && directorPerson) || isDirectorNameQuery) {
+    movie = await findTopDirectedMovie(directorPerson.id);
+    searchMode = "director";
+  }
+
+  if (!movie?.id) {
     return {
       title: query,
       type: "movie",
-      desc: "No movie found from TMDB.",
-      path: ["검색어 구체화", "장르 후보 확장", "감독 필모그래피 연결"],
+      desc: "No movie/director result found from TMDB.",
+      path: [],
       links: [],
+      connectedSections: [],
     };
   }
 
@@ -191,14 +221,14 @@ async function lookupMovie(query) {
     `https://api.themoviedb.org/3/movie/${movie.id}?` +
     new URLSearchParams({
       api_key: process.env.TMDB_API_KEY,
-      language: "en-US",
+      language: "ko-KR",
     });
 
   const creditUrl =
     `https://api.themoviedb.org/3/movie/${movie.id}/credits?` +
     new URLSearchParams({
       api_key: process.env.TMDB_API_KEY,
-      language: "en-US",
+      language: "ko-KR",
     });
 
   const [detailResponse, creditResponse] = await Promise.all([
@@ -212,10 +242,112 @@ async function lookupMovie(query) {
 
   const detail = await detailResponse.json();
   const credit = await creditResponse.json();
-  const director =
-    credit?.crew?.find((person) => person.job === "Director")?.name || "Unknown Director";
+  const director = credit?.crew?.find((person) => person.job === "Director");
+  const writers = uniqByName(
+    credit?.crew?.filter((person) =>
+      ["Screenplay", "Writer", "Story"].includes(person.job)
+    ) || []
+  ).slice(0, 5);
+  const cast = uniqByName(credit?.cast || []).slice(0, 8);
+  const musicCrew = uniqByName(
+    credit?.crew?.filter((person) => person.job?.toLowerCase().includes("music")) || []
+  ).slice(0, 3);
+  const artCrew = uniqByName(
+    credit?.crew?.filter((person) =>
+      ["Production Design", "Art Direction", "Set Decoration"].includes(person.job)
+    ) || []
+  ).slice(0, 3);
+  const costumeCrew = uniqByName(
+    credit?.crew?.filter((person) => person.job?.toLowerCase().includes("costume")) || []
+  ).slice(0, 3);
 
-  const wikiSummary = await fetchWikipediaSummary(detail.title);
+  const productionCompanies = (detail?.production_companies || []).slice(0, 6);
+  const wikiSummary = await fetchWikipediaSummary(detail.title || movie.title || query);
+  const directorSummary = director?.name ? await fetchWikipediaSummary(director.name) : null;
+  const { awards, distributors } = await fetchMovieWikidataMeta(detail.title || movie.title);
+
+  const creditsItems = [];
+  if (director?.name) {
+    creditsItems.push({
+      label: `Director: ${director.name}`,
+      url: buildKnowledgeUrl(director.name),
+    });
+  }
+  writers.forEach((person) => {
+    creditsItems.push({
+      label: `Writer: ${person.name}`,
+      url: buildKnowledgeUrl(person.name),
+    });
+  });
+  productionCompanies.forEach((company) => {
+    creditsItems.push({
+      label: `Production: ${company.name}`,
+      url: buildKnowledgeUrl(company.name),
+    });
+  });
+  if (distributors.length) {
+    distributors.forEach((name) => {
+      creditsItems.push({
+        label: `Distributor: ${name}`,
+        url: buildKnowledgeUrl(name),
+      });
+    });
+  } else {
+    creditsItems.push({
+      label: "Distributor: n/a",
+      url: "",
+    });
+  }
+  cast.forEach((person) => {
+    creditsItems.push({
+      label: `Cast: ${person.name}`,
+      url: buildKnowledgeUrl(person.name),
+    });
+  });
+  musicCrew.forEach((person) => {
+    creditsItems.push({
+      label: `Music: ${person.name}`,
+      url: buildKnowledgeUrl(person.name),
+    });
+  });
+  artCrew.forEach((person) => {
+    creditsItems.push({
+      label: `Art: ${person.name}`,
+      url: buildKnowledgeUrl(person.name),
+    });
+  });
+  costumeCrew.forEach((person) => {
+    creditsItems.push({
+      label: `Costume: ${person.name}`,
+      url: buildKnowledgeUrl(person.name),
+    });
+  });
+
+  const genreItems = (detail?.genres || []).map((genre) => ({
+    label: genre.name,
+    url: buildKnowledgeUrl(genre.name),
+  }));
+  const directorFeature = firstSentence(directorSummary) || "Open data에서 감독 특징 정보가 제한적입니다.";
+  const awardItems = awards.length
+    ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
+    : [{ label: "No award records found in open data.", url: "" }];
+
+  const connectedSections = [
+    { title: "1) Credits", items: creditsItems.slice(0, 40) },
+    { title: "2) Genres", items: genreItems.slice(0, 10) },
+    {
+      title: "3) Director Signatures",
+      items: [
+        {
+          label: director?.name
+            ? `${director.name}: ${directorFeature}`
+            : directorFeature,
+          url: director?.name ? buildKnowledgeUrl(director.name) : "",
+        },
+      ],
+    },
+    { title: "4) Awards", items: awardItems.slice(0, 20) },
+  ];
 
   return {
     title: detail.title,
@@ -223,19 +355,170 @@ async function lookupMovie(query) {
     desc:
       wikiSummary ||
       detail.overview ||
-      `${detail.title} directed by ${director}, released on ${detail.release_date || "n/a"}.`,
-    path: [
-      `${director} 연출 특징 분석`,
-      `${(detail.genres || []).slice(0, 2).map((g) => g.name).join(" / ") || "장르"} 계보 공부`,
-      "동시대 유사 영화 비교",
-    ],
+      `${detail.title} (${searchMode} search), released on ${detail.release_date || "n/a"}.`,
+    path: [],
     links: [
-      `Director: ${director}`,
+      `Search mode: ${searchMode}`,
       ...((detail.genres || []).slice(0, 6).map((genre) => genre.name)),
       `Release: ${detail.release_date || "n/a"}`,
       "Source: TMDB",
     ],
+    connectedSections,
   };
+}
+
+async function findTopDirectedMovie(personId) {
+  if (!personId || !process.env.TMDB_API_KEY) {
+    return null;
+  }
+  const creditsUrl =
+    `https://api.themoviedb.org/3/person/${personId}/movie_credits?` +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      language: "ko-KR",
+    });
+  const creditsResponse = await fetch(creditsUrl);
+  if (!creditsResponse.ok) {
+    return null;
+  }
+  const credits = await creditsResponse.json();
+  const directed = (credits?.crew || []).filter((item) => item.job === "Director");
+  directed.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  return directed[0] || null;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function uniqByName(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = normalizeText(item?.name);
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildKnowledgeUrl(name) {
+  if (!name) {
+    return "";
+  }
+  if (/[가-힣]/.test(name)) {
+    return `https://namu.wiki/w/${encodeURIComponent(name)}`;
+  }
+  return `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(name)}`;
+}
+
+function firstSentence(text) {
+  if (!text) {
+    return "";
+  }
+  const [head] = String(text).split(/(?<=[.!?])\s+/);
+  return head || text;
+}
+
+async function fetchMovieWikidataMeta(title) {
+  const qid = await fetchWikipediaQid(title);
+  if (!qid) {
+    return { awards: [], distributors: [] };
+  }
+  const entity = await fetchWikidataEntity(qid);
+  if (!entity) {
+    return { awards: [], distributors: [] };
+  }
+  const awardIds = extractClaimEntityIds(entity, "P166");
+  const distributorIds = extractClaimEntityIds(entity, "P750");
+  const labelMap = await fetchWikidataLabels([...awardIds, ...distributorIds]);
+  return {
+    awards: awardIds.map((id) => labelMap[id]).filter(Boolean),
+    distributors: distributorIds.map((id) => labelMap[id]).filter(Boolean),
+  };
+}
+
+async function fetchWikipediaQid(title) {
+  if (!title) {
+    return null;
+  }
+  const url =
+    "https://en.wikipedia.org/w/api.php?" +
+    new URLSearchParams({
+      action: "query",
+      format: "json",
+      prop: "pageprops",
+      ppprop: "wikibase_item",
+      titles: title,
+      origin: "*",
+    });
+  const response = await fetch(url);
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json();
+  const pages = data?.query?.pages || {};
+  const firstPage = Object.values(pages)[0];
+  return firstPage?.pageprops?.wikibase_item || null;
+}
+
+async function fetchWikidataEntity(qid) {
+  const url =
+    "https://www.wikidata.org/w/api.php?" +
+    new URLSearchParams({
+      action: "wbgetentities",
+      ids: qid,
+      props: "claims",
+      format: "json",
+      origin: "*",
+    });
+  const response = await fetch(url);
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json();
+  return data?.entities?.[qid] || null;
+}
+
+function extractClaimEntityIds(entity, propertyId) {
+  const claims = entity?.claims?.[propertyId] || [];
+  const ids = [];
+  claims.forEach((claim) => {
+    const id = claim?.mainsnak?.datavalue?.value?.id;
+    if (id) {
+      ids.push(id);
+    }
+  });
+  return [...new Set(ids)];
+}
+
+async function fetchWikidataLabels(ids) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!uniqueIds.length) {
+    return {};
+  }
+  const url =
+    "https://www.wikidata.org/w/api.php?" +
+    new URLSearchParams({
+      action: "wbgetentities",
+      ids: uniqueIds.join("|"),
+      props: "labels",
+      languages: "en|ko",
+      format: "json",
+      origin: "*",
+    });
+  const response = await fetch(url);
+  if (!response.ok) {
+    return {};
+  }
+  const data = await response.json();
+  const entities = data?.entities || {};
+  const output = {};
+  uniqueIds.forEach((id) => {
+    output[id] = entities?.[id]?.labels?.ko?.value || entities?.[id]?.labels?.en?.value || id;
+  });
+  return output;
 }
 
 async function expandMusic(query) {

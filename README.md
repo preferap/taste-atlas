@@ -30,6 +30,8 @@ Open `http://localhost:5500`.
 - `GET /api/expand?type=music&q=radiohead`
 - `GET /api/expand?type=movie&q=pulp%20fiction`
 
+Movie lookup supports both title and director-name queries (Korean/English).
+
 ## Keys
 
 - TMDB: create API key at TMDB settings

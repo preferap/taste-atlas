@@ -6,7 +6,9 @@ const archiveCardEl = document.getElementById("archive-card");
 const archiveTitleEl = document.getElementById("archive-title");
 const archiveTypeEl = document.getElementById("archive-type");
 const archiveDescEl = document.getElementById("archive-desc");
+const studyPathSectionEl = document.getElementById("study-path-section");
 const archivePathEl = document.getElementById("archive-path");
+const archiveConnectedSectionsEl = document.getElementById("archive-connected-sections");
 const archiveLinksEl = document.getElementById("archive-links");
 const sourceStatusEl = document.getElementById("source-status");
 const expandNodeEl = document.getElementById("expand-node");
@@ -200,12 +202,49 @@ function openArchive(node) {
   archiveTypeEl.textContent = node.type.toUpperCase();
   archiveDescEl.textContent = node.desc || "No description yet.";
 
+  const showStudyPath = node.type !== "movie";
+  studyPathSectionEl.style.display = showStudyPath ? "block" : "none";
   archivePathEl.innerHTML = "";
   (node.path || []).forEach((step) => {
     const li = document.createElement("li");
     li.textContent = step;
     archivePathEl.appendChild(li);
   });
+
+  archiveConnectedSectionsEl.innerHTML = "";
+  const connectedSections = Array.isArray(node.connectedSections) ? node.connectedSections : [];
+  if (connectedSections.length > 0) {
+    archiveLinksEl.classList.add("hidden");
+    connectedSections.forEach((section) => {
+      const group = document.createElement("section");
+      group.className = "connected-group";
+      const title = document.createElement("h5");
+      title.textContent = section.title || "Connected";
+      group.appendChild(title);
+
+      const list = document.createElement("ul");
+      const items = Array.isArray(section.items) ? section.items : [];
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        const label = item?.label || item?.name || "";
+        if (item?.url) {
+          const link = document.createElement("a");
+          link.href = item.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = label;
+          li.appendChild(link);
+        } else {
+          li.textContent = label;
+        }
+        list.appendChild(li);
+      });
+      group.appendChild(list);
+      archiveConnectedSectionsEl.appendChild(group);
+    });
+  } else {
+    archiveLinksEl.classList.remove("hidden");
+  }
 
   archiveLinksEl.innerHTML = "";
   (node.links || []).forEach((link) => {

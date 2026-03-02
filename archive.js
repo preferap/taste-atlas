@@ -44,6 +44,13 @@ function renderArchive() {
     const connections = countConnections(edges, node.id);
     const path = Array.isArray(node.path) ? node.path : [];
     const links = Array.isArray(node.links) ? node.links : [];
+    const connectedSections = Array.isArray(node.connectedSections) ? node.connectedSections : [];
+    const connectedSummary = connectedSections
+      .map((section) => {
+        const items = Array.isArray(section.items) ? section.items : [];
+        return `${section.title}: ${items.map((item) => item.label || item.name).join(", ")}`;
+      })
+      .join(" | ");
 
     li.innerHTML = `
       <div class="archive-head">
@@ -54,13 +61,14 @@ function renderArchive() {
       <p class="muted">Connections: ${connections}</p>
       <p class="muted">Study Path: ${escapeHtml(path.join(" -> ") || "n/a")}</p>
       <p class="muted">Linked Concepts: ${escapeHtml(links.join(", ") || "n/a")}</p>
+      <p class="muted">Connected Sections: ${escapeHtml(connectedSummary || "n/a")}</p>
     `;
     archiveListEl.appendChild(li);
   });
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
