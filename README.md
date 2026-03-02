@@ -25,6 +25,8 @@ Open `http://localhost:5500`.
 ## API
 
 - `GET /api/health`: source key status
+- `GET /api/search?type=movie&q=parasite`
+- `GET /api/search?type=music&q=radiohead`
 - `GET /api/lookup?type=music&q=radiohead`
 - `GET /api/lookup?type=movie&q=pulp%20fiction`
 - `GET /api/expand?type=music&q=radiohead`

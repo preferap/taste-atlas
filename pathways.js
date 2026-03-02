@@ -1,4 +1,4 @@
-const GRAPH_STORAGE_KEY = "taste-atlas-graph-v1";
+const GRAPH_STORAGE_KEY = "taste-atlas-graph-v2";
 
 const pathwayCountEl = document.getElementById("pathway-count");
 const pathwayEmptyTextEl = document.getElementById("pathway-empty-text");

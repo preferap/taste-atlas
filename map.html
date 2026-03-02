@@ -42,6 +42,12 @@
           <button type="submit">Add to Map (Live API)</button>
         </form>
 
+        <section id="search-results" class="search-results hidden">
+          <h3>Search Results</h3>
+          <p class="muted">동명 결과가 있을 수 있으니 하나를 선택하세요.</p>
+          <ul id="search-result-list" class="search-result-list"></ul>
+        </section>
+
         <div class="chips">
           <button class="chip" data-seed="pulp-fiction">Pulp Fiction</button>
           <button class="chip" data-seed="hitchcock">Alfred Hitchcock</button>
@@ -67,6 +73,7 @@
         <article id="archive-card" class="archive-card hidden">
           <h3 id="archive-title"></h3>
           <p id="archive-type" class="badge"></p>
+          <img id="archive-poster" class="archive-poster hidden" alt="poster" />
           <p id="archive-desc"></p>
           <button id="expand-node" type="button">Expand Connections</button>
           <section id="study-path-section">

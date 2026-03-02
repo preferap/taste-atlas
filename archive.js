@@ -1,4 +1,4 @@
-const GRAPH_STORAGE_KEY = "taste-atlas-graph-v1";
+const GRAPH_STORAGE_KEY = "taste-atlas-graph-v2";
 
 const archiveCountEl = document.getElementById("archive-count");
 const archiveEmptyTextEl = document.getElementById("archive-empty-text");
