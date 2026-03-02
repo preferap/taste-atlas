@@ -66,6 +66,14 @@ body {
   font-size: 14px;
 }
 
+.status {
+  margin: 8px 0 12px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
 form {
   display: grid;
   gap: 8px;

@@ -8,6 +8,7 @@ const archiveTypeEl = document.getElementById("archive-type");
 const archiveDescEl = document.getElementById("archive-desc");
 const archivePathEl = document.getElementById("archive-path");
 const archiveLinksEl = document.getElementById("archive-links");
+const sourceStatusEl = document.getElementById("source-status");
 
 const nodes = [];
 const edges = [];
@@ -133,22 +134,37 @@ function openArchive(node) {
   });
 }
 
-formEl.addEventListener("submit", (event) => {
+formEl.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(formEl);
   const type = formData.get("type");
   const title = String(formData.get("title") || "").trim();
 
-  if (!title) return;
+  if (!title) {
+    return;
+  }
 
-  addNode({
-    title,
-    type,
-    desc: "User-added taste seed. Add metadata from TMDB/Spotify/Wikidata in next step.",
-    path: ["작품/아티스트 기본정보 수집", "연결 장르 확장", "영향 관계 학습"],
-    links: [],
-  });
-
+  sourceStatusEl.textContent = "Looking up live data...";
+  try {
+    const response = await fetch(
+      `/api/lookup?type=${encodeURIComponent(type)}&q=${encodeURIComponent(title)}`
+    );
+    if (!response.ok) {
+      throw new Error(`Lookup failed (${response.status})`);
+    }
+    const data = await response.json();
+    addNode(data.node);
+    sourceStatusEl.textContent = "Live API node added.";
+  } catch (_error) {
+    addNode({
+      title,
+      type,
+      desc: "Live API failed. Local fallback node added.",
+      path: ["API 키 확인", "데이터 소스 연결", "지식지도 확장"],
+      links: [],
+    });
+    sourceStatusEl.textContent = "API failed, fallback node added.";
+  }
   formEl.reset();
 });
 
@@ -160,4 +176,20 @@ document.querySelectorAll(".chip").forEach((chip) => {
   });
 });
 
+async function checkSourceHealth() {
+  try {
+    const response = await fetch("/api/health");
+    if (!response.ok) {
+      throw new Error("health check failed");
+    }
+    const data = await response.json();
+    const spotify = data.sources.spotify ? "Spotify: ON" : "Spotify: OFF";
+    const tmdb = data.sources.tmdb ? "TMDB: ON" : "TMDB: OFF";
+    sourceStatusEl.textContent = `${spotify} | ${tmdb} | Wikidata: ON`;
+  } catch (_error) {
+    sourceStatusEl.textContent = "Health check failed. Start with: npm run dev";
+  }
+}
+
 ["pulp-fiction", "radiohead", "hitchcock"].forEach((seed) => addNode(seedDb[seed]));
+checkSourceHealth();

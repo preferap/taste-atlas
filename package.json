@@ -1,0 +1,30 @@
+{
+  "name": "taste-map",
+  "version": "1.0.0",
+  "description": "Taste Atlas prototype with Spotify, TMDB, Wikidata integration",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/preferap/taste-atlas.git"
+  },
+  "keywords": [
+    "taste-map",
+    "spotify",
+    "tmdb",
+    "wikidata"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/preferap/taste-atlas/issues"
+  },
+  "homepage": "https://github.com/preferap/taste-atlas#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

@@ -21,6 +21,7 @@
       <section class="panel input-panel">
         <h2>Seed Your Taste</h2>
         <p class="muted">좋아하는 음악/영화를 입력하면 지도에 노드를 추가합니다.</p>
+        <p id="source-status" class="status">Checking data sources...</p>
 
         <form id="taste-form">
           <label for="type">Type</label>
@@ -32,7 +33,7 @@
           <label for="title">Title</label>
           <input id="title" name="title" placeholder="예: Pulp Fiction / Radiohead" />
 
-          <button type="submit">Add to Map</button>
+          <button type="submit">Add to Map (Live API)</button>
         </form>
 
         <div class="chips">

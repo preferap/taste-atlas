@@ -56,11 +56,9 @@ git commit -m "init: first version of taste atlas"
 4. `Create repository` 클릭
 
 ## 7. 내 컴퓨터 Git과 GitHub 연결
-아래에서 `YOUR_ID`는 네 GitHub 아이디로 바꿔:
-
 ```bash
 git branch -M main
-git remote add origin https://github.com/YOUR_ID/taste-atlas.git
+git remote add origin https://github.com/preferap/taste-atlas.git
 git push -u origin main
 ```
 
