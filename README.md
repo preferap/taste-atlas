@@ -1,6 +1,7 @@
 # Taste Atlas
 
 Minimal portfolio prototype for building a personal taste knowledge map across music and movies.
+Music source is now `MusicBrainz + Wikidata + Wikipedia` (no Spotify required).
 
 ## Run
 
@@ -21,6 +22,5 @@ Open `http://localhost:5500`.
 
 ## Keys
 
-- Spotify: create app at Spotify Developer Dashboard
 - TMDB: create API key at TMDB settings
-- Wikidata/Wikipedia: no key needed in this prototype
+- MusicBrainz/Wikidata/Wikipedia: no key needed in this prototype

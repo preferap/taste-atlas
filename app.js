@@ -183,9 +183,9 @@ async function checkSourceHealth() {
       throw new Error("health check failed");
     }
     const data = await response.json();
-    const spotify = data.sources.spotify ? "Spotify: ON" : "Spotify: OFF";
+    const music = data.sources.musicbrainz ? "MusicBrainz: ON" : "MusicBrainz: OFF";
     const tmdb = data.sources.tmdb ? "TMDB: ON" : "TMDB: OFF";
-    sourceStatusEl.textContent = `${spotify} | ${tmdb} | Wikidata: ON`;
+    sourceStatusEl.textContent = `${music} | ${tmdb} | Wikidata: ON`;
   } catch (_error) {
     sourceStatusEl.textContent = "Health check failed. Start with: npm run dev";
   }

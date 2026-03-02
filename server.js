@@ -7,15 +7,13 @@ const port = process.env.PORT || 5500;
 
 loadEnvFile();
 
-let spotifyTokenCache = null;
-
 app.use(express.static(__dirname));
 
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     sources: {
-      spotify: Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET),
+      musicbrainz: true,
       tmdb: Boolean(process.env.TMDB_API_KEY),
       wikidata: true,
       wikipedia: true,
@@ -55,63 +53,72 @@ app.listen(port, () => {
 });
 
 async function lookupMusic(query) {
-  if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
-    return {
-      title: query,
-      type: "music",
-      desc: "Spotify credentials missing. Set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.",
-      path: ["Spotify API 키 연결", "아티스트/장르 보강", "영향 관계 그래프 확장"],
-      links: [],
-    };
-  }
-
-  const accessToken = await getSpotifyAccessToken();
   const searchUrl =
-    "https://api.spotify.com/v1/search?" +
+    "https://musicbrainz.org/ws/2/artist/?" +
     new URLSearchParams({
-      q: query,
-      type: "artist",
+      query,
+      fmt: "json",
       limit: "1",
     });
 
   const searchResponse = await fetch(searchUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
   });
 
   if (!searchResponse.ok) {
-    throw new Error(`Spotify search failed (${searchResponse.status}).`);
+    throw new Error(`MusicBrainz search failed (${searchResponse.status}).`);
   }
 
   const searchData = await searchResponse.json();
-  const artist = searchData?.artists?.items?.[0];
+  const artist = searchData?.artists?.[0];
 
-  if (!artist) {
+  if (!artist?.id) {
     return {
       title: query,
       type: "music",
-      desc: "No artist found from Spotify.",
+      desc: "No artist found from MusicBrainz.",
       path: ["검색어 구체화", "연관 아티스트 수집", "장르 맥락 확장"],
       links: [],
     };
   }
 
+  const detailUrl =
+    `https://musicbrainz.org/ws/2/artist/${artist.id}?` +
+    new URLSearchParams({
+      inc: "tags+url-rels",
+      fmt: "json",
+    });
+
+  const detailResponse = await fetch(detailUrl, {
+    headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
+  });
+
+  if (!detailResponse.ok) {
+    throw new Error(`MusicBrainz detail failed (${detailResponse.status}).`);
+  }
+
+  const detail = await detailResponse.json();
   const wikiSummary = await fetchWikipediaSummary(artist.name);
+  const wikidataSummary = await fetchWikidataDescription(detail?.relations);
+  const tagNames = (detail?.tags || []).slice(0, 6).map((tag) => tag.name);
 
   return {
     title: artist.name,
     type: "music",
     desc:
       wikiSummary ||
-      `${artist.name} is linked with ${artist.genres?.slice(0, 3).join(", ") || "multiple genres"}.`,
+      wikidataSummary ||
+      `${artist.name} is linked with ${tagNames.slice(0, 3).join(", ") || "multiple genres"}.`,
     path: [
       `${artist.name} 대표작 확인`,
-      `장르 ${artist.genres?.slice(0, 2).join(" / ") || "분석"} 공부`,
+      `장르 ${tagNames.slice(0, 2).join(" / ") || "분석"} 공부`,
       "영향받은 아티스트/씬 연결",
     ],
     links: [
-      ...(artist.genres || []).slice(0, 6),
-      `Popularity: ${artist.popularity ?? "n/a"}`,
-      "Source: Spotify",
+      ...tagNames,
+      `Country: ${detail?.country || "n/a"}`,
+      `Disambiguation: ${detail?.disambiguation || "n/a"}`,
+      "Source: MusicBrainz",
     ],
   };
 }
@@ -206,37 +213,6 @@ async function lookupMovie(query) {
   };
 }
 
-async function getSpotifyAccessToken() {
-  const now = Date.now();
-  if (spotifyTokenCache && spotifyTokenCache.expiresAt > now) {
-    return spotifyTokenCache.value;
-  }
-
-  const raw = `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`;
-  const encoded = Buffer.from(raw).toString("base64");
-
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${encoded}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ grant_type: "client_credentials" }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Spotify token request failed (${response.status}).`);
-  }
-
-  const data = await response.json();
-  spotifyTokenCache = {
-    value: data.access_token,
-    expiresAt: now + (data.expires_in - 30) * 1000,
-  };
-
-  return data.access_token;
-}
-
 async function fetchWikipediaSummary(title) {
   if (!title) {
     return null;
@@ -251,6 +227,35 @@ async function fetchWikipediaSummary(title) {
 
   const data = await response.json();
   return data.extract || null;
+}
+
+async function fetchWikidataDescription(relations) {
+  const wikidataUrl = relations?.find((rel) => rel?.type === "wikidata")?.url?.resource;
+  if (!wikidataUrl) {
+    return null;
+  }
+
+  const qid = wikidataUrl.split("/").pop();
+  if (!qid) {
+    return null;
+  }
+
+  const url =
+    "https://www.wikidata.org/w/api.php?" +
+    new URLSearchParams({
+      action: "wbgetentities",
+      ids: qid,
+      props: "descriptions",
+      format: "json",
+      origin: "*",
+    });
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json();
+  return data?.entities?.[qid]?.descriptions?.en?.value || null;
 }
 
 function loadEnvFile() {
