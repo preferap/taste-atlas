@@ -44,4 +44,5 @@ Movie lookup supports both title and director-name queries (Korean/English).
 ## Keys
 
 - TMDB: create API key at TMDB settings
+- OpenAI: set `OPENAI_API_KEY` to enable GPT-based Director Signatures (academic tone, long form)
 - MusicBrainz/Wikidata/Wikipedia: no key needed in this prototype

@@ -225,24 +225,52 @@ function renderDetail(node) {
     title.textContent = section.title;
     wrapper.appendChild(title);
 
-    const list = document.createElement("ul");
-    const items = Array.isArray(section.items) ? section.items : [];
-    items.forEach((item) => {
-      const li = document.createElement("li");
-      if (item.url) {
-        const a = document.createElement("a");
-        a.href = item.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = item.label || item.name || "";
-        li.appendChild(a);
-      } else {
-        li.textContent = item.label || item.name || "";
-      }
-      list.appendChild(li);
-    });
+    const groups = Array.isArray(section.groups) ? section.groups : [];
+    if (groups.length > 0) {
+      groups.forEach((group) => {
+        const groupTitle = document.createElement("p");
+        groupTitle.className = "muted";
+        groupTitle.textContent = group.title || "";
+        wrapper.appendChild(groupTitle);
+        const groupList = document.createElement("ul");
+        const groupItems = Array.isArray(group.items) ? group.items : [];
+        groupItems.forEach((item) => {
+          const li = document.createElement("li");
+          if (item.url) {
+            const a = document.createElement("a");
+            a.href = item.url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = item.label || item.name || "";
+            li.appendChild(a);
+          } else {
+            li.textContent = item.label || item.name || "";
+          }
+          groupList.appendChild(li);
+        });
+        wrapper.appendChild(groupList);
+      });
+    }
 
-    wrapper.appendChild(list);
+    const items = Array.isArray(section.items) ? section.items : [];
+    if (items.length) {
+      const list = document.createElement("ul");
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        if (item.url) {
+          const a = document.createElement("a");
+          a.href = item.url;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = item.label || item.name || "";
+          li.appendChild(a);
+        } else {
+          li.textContent = item.label || item.name || "";
+        }
+        list.appendChild(li);
+      });
+      wrapper.appendChild(list);
+    }
     detailConnectedSectionsEl.appendChild(wrapper);
   });
 }

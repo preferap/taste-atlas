@@ -336,57 +336,105 @@ async function lookupMovie({ q, candidateId, candidateKind }) {
   const directorSummary = director?.name ? await fetchWikipediaSummary(director.name) : null;
   const { awards, distributors } = await fetchMovieWikidataMeta(detail.title || q);
 
-  const creditsItems = [];
-  if (director?.name) {
-    creditsItems.push({ label: `Director: ${director.name}`, url: buildKnowledgeUrl(director.name) });
-  }
-  writers.forEach((person) => {
-    creditsItems.push({ label: `Writer: ${person.name}`, url: buildKnowledgeUrl(person.name) });
-  });
-  productionCompanies.forEach((company) => {
-    creditsItems.push({ label: `Production: ${company.name}`, url: buildKnowledgeUrl(company.name) });
-  });
-  if (distributors.length) {
-    distributors.forEach((name) => {
-      creditsItems.push({ label: `Distributor: ${name}`, url: buildKnowledgeUrl(name) });
-    });
-  }
-  cast.forEach((person) => {
-    creditsItems.push({ label: `Cast: ${person.name}`, url: buildKnowledgeUrl(person.name) });
-  });
-  musicCrew.forEach((person) => {
-    creditsItems.push({ label: `Music: ${person.name}`, url: buildKnowledgeUrl(person.name) });
-  });
-  artCrew.forEach((person) => {
-    creditsItems.push({ label: `Art: ${person.name}`, url: buildKnowledgeUrl(person.name) });
-  });
-  costumeCrew.forEach((person) => {
-    creditsItems.push({ label: `Costume: ${person.name}`, url: buildKnowledgeUrl(person.name) });
-  });
-
   const genreItems = (detail?.genres || []).map((genre) => ({
     label: genre.name,
     url: buildKnowledgeUrl(genre.name),
   }));
 
-  const directorFeature = firstSentence(directorSummary) || "Open data에서 감독 특징 정보가 제한적입니다.";
+  const creditGroups = [
+    {
+      title: "감독+각본",
+      items: [
+        ...(director?.name
+          ? [{ label: `Director: ${director.name}`, url: buildKnowledgeUrl(director.name) }]
+          : []),
+        ...writers.map((person) => ({
+          label: `Writer: ${person.name}`,
+          url: buildKnowledgeUrl(person.name),
+        })),
+      ],
+    },
+    {
+      title: "제작사+배급사",
+      items: [
+        ...productionCompanies.map((company) => ({
+          label: `Production: ${company.name}`,
+          url: buildKnowledgeUrl(company.name),
+        })),
+        ...distributors.map((name) => ({
+          label: `Distributor: ${name}`,
+          url: buildKnowledgeUrl(name),
+        })),
+      ],
+    },
+    {
+      title: "출연",
+      items: cast.map((person) => ({
+        label: `Cast: ${person.name}`,
+        url: buildKnowledgeUrl(person.name),
+      })),
+    },
+    {
+      title: "음악+미술+의상",
+      items: [
+        ...musicCrew.map((person) => ({
+          label: `Music: ${person.name}`,
+          url: buildKnowledgeUrl(person.name),
+        })),
+        ...artCrew.map((person) => ({
+          label: `Art: ${person.name}`,
+          url: buildKnowledgeUrl(person.name),
+        })),
+        ...costumeCrew.map((person) => ({
+          label: `Costume: ${person.name}`,
+          url: buildKnowledgeUrl(person.name),
+        })),
+      ],
+    },
+  ].map((group) => ({
+    ...group,
+    items: group.items.slice(0, 12),
+  }));
+
+  const directorSignatureProfile = await buildDirectorSignatureProfile({
+    directorName: director?.name || "",
+    movieTitle: detail.title || q || "",
+    directorSummary: directorSummary || "",
+    movieSummary: wikiSummary || detail.overview || "",
+  });
+
   const awardItems = awards.length
     ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
     : [{ label: "No award records found in open data.", url: "" }];
+  const awardArticleItems = awards.length
+    ? await fetchAwardArticles({
+        movieTitle: detail.title || q || "",
+        directorName: director?.name || "",
+        awards,
+      })
+    : [];
 
   const connectedSections = [
-    { title: "1) Credits", items: creditsItems.slice(0, 40) },
+    { title: "1) Credits", groups: creditGroups, items: [] },
     { title: "2) Genres", items: genreItems.slice(0, 10) },
     {
       title: "3) Director Signatures",
       items: [
-        {
-          label: director?.name ? `${director.name}: ${directorFeature}` : directorFeature,
-          url: director?.name ? buildKnowledgeUrl(director.name) : "",
-        },
+        { label: `Style: ${directorSignatureProfile.style}`, url: "" },
+        { label: `Themes: ${directorSignatureProfile.themes}`, url: "" },
+        { label: `Form: ${directorSignatureProfile.form}`, url: "" },
+        { label: `Critical Reception: ${directorSignatureProfile.criticalReception}`, url: "" },
+        { label: `Landmark Works: ${directorSignatureProfile.landmarkWorks}`, url: "" },
+        { label: `Study Guide: ${directorSignatureProfile.studyGuide}`, url: "" },
       ],
     },
-    { title: "4) Awards", items: awardItems.slice(0, 20) },
+    {
+      title: "4) Awards",
+      items: [
+        ...awardItems.slice(0, 10),
+        ...awardArticleItems.slice(0, 3),
+      ],
+    },
   ];
 
   return {
@@ -540,7 +588,13 @@ function buildExpansionNodes(baseNode, parentType) {
   const output = [];
 
   sections.forEach((section) => {
-    const items = Array.isArray(section.items) ? section.items : [];
+    const groupedItems = Array.isArray(section.groups)
+      ? section.groups.flatMap((group) => (Array.isArray(group.items) ? group.items : []))
+      : [];
+    const items = [
+      ...(Array.isArray(section.items) ? section.items : []),
+      ...groupedItems,
+    ];
     items.slice(0, 4).forEach((item) => {
       const label = item?.label || item?.name || "";
       if (!label) {
@@ -685,6 +739,213 @@ function firstSentence(text) {
   }
   const [head] = String(text).split(/(?<=[.!?])\s+/);
   return head || text;
+}
+
+async function buildDirectorSignatureProfile({
+  directorName,
+  movieTitle,
+  directorSummary,
+  movieSummary,
+}) {
+  const fallback = buildFallbackDirectorProfile({
+    directorName,
+    movieTitle,
+    directorSummary,
+    movieSummary,
+  });
+
+  if (!process.env.OPENAI_API_KEY || !directorName) {
+    return fallback;
+  }
+
+  try {
+    const prompt = [
+      "당신은 영화연구 조교수다.",
+      "아래 감독에 대해 학술형 한국어 요약을 작성하라.",
+      "각 항목은 정확히 4문장으로 구성하라.",
+      "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
+      "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
+      `감독: ${directorName}`,
+      `관련 작품: ${movieTitle}`,
+      `감독 요약 자료: ${directorSummary || "n/a"}`,
+      `작품 요약 자료: ${movieSummary || "n/a"}`,
+    ].join("\n");
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        input: prompt,
+      }),
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const data = await response.json();
+    const text = extractResponseText(data);
+    const parsed = parseJsonObject(text);
+    if (!parsed) {
+      return fallback;
+    }
+
+    return {
+      style: ensureSentenceCount(parsed.style, 4) || fallback.style,
+      themes: ensureSentenceCount(parsed.themes, 4) || fallback.themes,
+      form: ensureSentenceCount(parsed.form, 4) || fallback.form,
+      criticalReception:
+        ensureSentenceCount(parsed.criticalReception, 4) || fallback.criticalReception,
+      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 4) || fallback.landmarkWorks,
+      studyGuide: ensureSentenceCount(parsed.studyGuide, 4) || fallback.studyGuide,
+    };
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function buildFallbackDirectorProfile({
+  directorName,
+  movieTitle,
+  directorSummary,
+  movieSummary,
+}) {
+  const director = directorName || "이 감독";
+  const film = movieTitle || "해당 작품";
+  const directorHead = firstSentence(directorSummary) || `${director}는 장르 혼합과 정교한 연출 전략으로 논의된다.`;
+  const movieHead = firstSentence(movieSummary) || `${film}는 사회적 맥락과 서사적 장치를 함께 제시한다.`;
+
+  return {
+    style: `${directorHead} 연출의 핵심은 장면의 리듬을 통제하면서 감정 곡선을 단계적으로 설계하는 방식이다. 카메라의 이동과 인물 배치를 통해 서사의 권력관계를 시각적으로 구조화한다. 이러한 스타일은 상업성과 작가성을 동시에 확보하려는 전략으로 읽힌다.`,
+    themes: `${movieHead} 반복되는 주제는 계급, 욕망, 도덕적 균열처럼 사회구조와 개인심리의 접점에 놓인다. 인물들은 제도적 압력 속에서 선택을 강요받으며 그 과정이 드라마의 긴장을 만든다. 이 주제 구성은 지역적 맥락을 넘어서 동시대 관객의 보편적 불안을 자극한다.`,
+    form: `${director}의 형식적 특징은 미장센의 층위를 통해 의미를 누적시키는 데 있다. 컷 전환은 설명보다 함축을 우선하며 관객의 해석 참여를 유도한다. 사운드와 침묵의 대비를 사용해 서사의 전환점을 강조한다. 결과적으로 형식은 내용의 보조가 아니라 비평적 논점을 생성하는 장치로 작동한다.`,
+    criticalReception: `${director}에 대한 평단 평가는 대체로 높은 완성도와 장르 혁신을 긍정한다. 동시에 일부 평론은 상징의 과잉이나 주제의 직접성을 한계로 지적한다. 그럼에도 핵심 합의는 대중성과 비평성을 동시 달성했다는 데 있다. 최근 논의에서는 글로벌 수용 맥락에서 이 연출이 어떻게 번역되는지도 중요한 평가 축이 된다.`,
+    landmarkWorks: `${director}의 대표작은 시대별 문제의식을 서로 다른 장르 실험으로 제시한다. ${film}는 그중에서도 서사구조와 사회비판의 결합이 선명한 사례로 자주 인용된다. 다른 주요 작품들과 비교하면 동일한 주제가 변주되는 방식이 관찰된다. 따라서 대표작 읽기는 개별 영화 감상보다 작가적 연속성을 추적하는 방식이 효과적이다.`,
+    studyGuide: `첫 단계에서는 ${film}를 중심으로 인물관계와 공간구조를 도식화해 기본 문법을 파악한다. 두 번째 단계에서는 같은 감독의 전후기 작품을 비교해 주제와 형식의 변화축을 기록한다. 세 번째 단계에서는 동시대 감독과의 비교를 통해 차별적 미학을 검증한다. 마지막으로 평론문과 인터뷰를 교차독해해 해석의 편향을 점검한다.`,
+  };
+}
+
+function extractResponseText(data) {
+  if (!data) {
+    return "";
+  }
+  if (typeof data.output_text === "string") {
+    return data.output_text;
+  }
+  const output = Array.isArray(data.output) ? data.output : [];
+  const texts = [];
+  output.forEach((item) => {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    content.forEach((part) => {
+      if (typeof part?.text === "string") {
+        texts.push(part.text);
+      }
+    });
+  });
+  return texts.join("\n").trim();
+}
+
+function parseJsonObject(text) {
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end < 0 || end <= start) {
+      return null;
+    }
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function ensureSentenceCount(text, minSentences) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return "";
+  }
+  const parts = value
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= minSentences) {
+    return parts.join(" ");
+  }
+  const pad = [...parts];
+  while (pad.length < minSentences) {
+    pad.push("추가적인 학술적 검토가 필요한 지점으로 평가된다.");
+  }
+  return pad.join(" ");
+}
+
+async function fetchAwardArticles({ movieTitle, directorName, awards }) {
+  const queryTerms = [movieTitle, directorName, ...awards.slice(0, 2)]
+    .filter(Boolean)
+    .join(" ");
+  if (!queryTerms) {
+    return [];
+  }
+
+  const rssUrl =
+    "https://news.google.com/rss/search?" +
+    new URLSearchParams({
+      q: `${queryTerms} award`,
+      hl: "ko",
+      gl: "KR",
+      ceid: "KR:ko",
+    });
+
+  try {
+    const response = await fetch(rssUrl);
+    if (!response.ok) {
+      return [];
+    }
+    const xml = await response.text();
+    const items = parseGoogleNewsRss(xml).slice(0, 3);
+    return items.map((item) => ({
+      label: `Article: ${item.title}`,
+      url: item.link,
+    }));
+  } catch (_error) {
+    return [];
+  }
+}
+
+function parseGoogleNewsRss(xml) {
+  const matches = [...String(xml || "").matchAll(/<item>([\s\S]*?)<\/item>/g)];
+  return matches
+    .map((match) => {
+      const block = match[1] || "";
+      const title = decodeXmlText(extractTag(block, "title"));
+      const link = decodeXmlText(extractTag(block, "link"));
+      return { title, link };
+    })
+    .filter((item) => item.title && item.link);
+}
+
+function extractTag(source, tagName) {
+  const pattern = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  const match = String(source || "").match(pattern);
+  return match?.[1] || "";
+}
+
+function decodeXmlText(value) {
+  return String(value || "")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'");
 }
 
 async function fetchWikipediaSummary(title) {

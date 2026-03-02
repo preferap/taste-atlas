@@ -47,7 +47,11 @@ function renderArchive() {
     const connectedSections = Array.isArray(node.connectedSections) ? node.connectedSections : [];
     const connectedSummary = connectedSections
       .map((section) => {
-        const items = Array.isArray(section.items) ? section.items : [];
+        const directItems = Array.isArray(section.items) ? section.items : [];
+        const groupedItems = Array.isArray(section.groups)
+          ? section.groups.flatMap((group) => (Array.isArray(group.items) ? group.items : []))
+          : [];
+        const items = [...directItems, ...groupedItems];
         return `${section.title}: ${items.map((item) => item.label || item.name).join(", ")}`;
       })
       .join(" | ");
