@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Taste Atlas - Nodes</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Taste Atlas</h1>
+      <p>노드맵 확인 전용 화면 (추후 3D 전환 예정)</p>
+      <nav class="top-nav">
+        <a href="./index.html">Home</a>
+        <a href="./map.html">Search</a>
+        <a href="./nodes.html" class="active">Nodes</a>
+        <a href="./archive.html">Archive</a>
+        <a href="./pathways.html">Pathways</a>
+      </nav>
+    </header>
+
+    <main class="nodes-layout">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Node Map (2D Placeholder)</h2>
+          <div class="panel-actions">
+            <span id="nodes-count" class="muted">0 nodes</span>
+            <button id="refresh-nodes" type="button" class="ghost-button">Refresh</button>
+          </div>
+        </div>
+        <svg id="node-map" viewBox="0 0 900 560" aria-label="node map"></svg>
+      </section>
+
+      <section class="panel">
+        <h2>Latest Search Results</h2>
+        <div class="result-columns">
+          <div>
+            <h4>콘텐츠</h4>
+            <ul id="nodes-content-results" class="search-result-list"></ul>
+          </div>
+          <div>
+            <h4>사람</h4>
+            <ul id="nodes-person-results" class="search-result-list"></ul>
+          </div>
+        </div>
+        <h2>Selected Node Info</h2>
+        <div id="node-detail-empty" class="muted">노드를 클릭하면 정보가 보입니다.</div>
+        <article id="node-detail-card" class="hidden">
+          <h3 id="node-detail-title"></h3>
+          <p id="node-detail-type" class="badge"></p>
+          <img id="node-detail-poster" class="archive-poster hidden" alt="poster" />
+          <p id="node-detail-desc"></p>
+        </article>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <small>White/Black minimal UI · English: Helvetica · Korean: Pretendard</small>
+    </footer>
+
+    <script src="./nodes.js"></script>
+  </body>
+</html>

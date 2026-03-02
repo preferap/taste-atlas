@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Taste Atlas - Map</title>
+    <title>Taste Atlas - Search</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link
       rel="stylesheet"
@@ -14,75 +14,58 @@
   <body>
     <header class="site-header">
       <h1>Taste Atlas</h1>
-      <p>내 취향을 지식지도로 펼치는 아카이브</p>
+      <p>검색/정보 확인 전용 화면 (노드맵 미노출)</p>
       <nav class="top-nav">
         <a href="./index.html">Home</a>
-        <a href="./map.html" class="active">Map</a>
+        <a href="./map.html" class="active">Search</a>
+        <a href="./nodes.html">Nodes</a>
         <a href="./archive.html">Archive</a>
         <a href="./pathways.html">Pathways</a>
       </nav>
     </header>
 
-    <main class="layout">
-      <section class="panel input-panel">
-        <h2>Seed Your Taste</h2>
-        <p class="muted">좋아하는 음악/영화를 입력하면 지도에 노드를 추가합니다.</p>
+    <main class="search-layout">
+      <section class="panel search-panel">
+        <h2>Search</h2>
         <p id="source-status" class="status">Checking data sources...</p>
 
+        <div class="type-buttons">
+          <button id="type-movie" type="button" class="type-btn active">Movie</button>
+          <button id="type-music" type="button" class="type-btn">Music</button>
+        </div>
+
         <form id="taste-form">
-          <label for="type">Type</label>
-          <select id="type" name="type">
-            <option value="music">Music</option>
-            <option value="movie">Movie</option>
-          </select>
-
-          <label for="title">Title</label>
-          <input id="title" name="title" placeholder="예: Pulp Fiction / Radiohead" />
-
-          <button type="submit">Add to Map (Live API)</button>
+          <label for="title">Title / Person</label>
+          <input id="title" name="title" placeholder="예: 기생충 / 봉준호 / Radiohead" />
+          <button type="submit">Search</button>
         </form>
 
         <section id="search-results" class="search-results hidden">
           <h3>Search Results</h3>
-          <p class="muted">동명 결과가 있을 수 있으니 하나를 선택하세요.</p>
-          <ul id="search-result-list" class="search-result-list"></ul>
-        </section>
-
-        <div class="chips">
-          <button class="chip" data-seed="pulp-fiction">Pulp Fiction</button>
-          <button class="chip" data-seed="hitchcock">Alfred Hitchcock</button>
-          <button class="chip" data-seed="radiohead">Radiohead</button>
-          <button class="chip" data-seed="shoegaze">Shoegaze</button>
-        </div>
-      </section>
-
-      <section class="panel map-panel">
-        <div class="panel-head">
-          <h2>Knowledge Map</h2>
-          <div class="panel-actions">
-            <span class="muted" id="node-count">0 nodes</span>
-            <button id="reset-map" type="button" class="ghost-button">Reset</button>
+          <div class="result-columns">
+            <div>
+              <h4>콘텐츠</h4>
+              <ul id="content-result-list" class="search-result-list"></ul>
+            </div>
+            <div>
+              <h4>사람</h4>
+              <ul id="person-result-list" class="search-result-list"></ul>
+            </div>
           </div>
-        </div>
-        <svg id="map" viewBox="0 0 900 560" aria-label="knowledge map"></svg>
+        </section>
       </section>
 
-      <section class="panel archive-panel">
-        <h2>Archive</h2>
-        <div id="archive-empty" class="muted">노드를 클릭하면 상세 맥락이 보입니다.</div>
-        <article id="archive-card" class="archive-card hidden">
-          <h3 id="archive-title"></h3>
-          <p id="archive-type" class="badge"></p>
-          <img id="archive-poster" class="archive-poster hidden" alt="poster" />
-          <p id="archive-desc"></p>
-          <button id="expand-node" type="button">Expand Connections</button>
-          <section id="study-path-section">
-            <h4>Study Path</h4>
-            <ul id="archive-path"></ul>
-          </section>
+      <section class="panel detail-panel">
+        <h2>Info</h2>
+        <div id="detail-empty" class="muted">검색 결과에서 `Select`를 누르면 상세 정보가 보입니다.</div>
+        <article id="detail-card" class="hidden">
+          <h3 id="detail-title"></h3>
+          <p id="detail-type" class="badge"></p>
+          <img id="detail-poster" class="archive-poster hidden" alt="poster" />
+          <p id="detail-desc"></p>
           <h4>Connected To</h4>
-          <div id="archive-connected-sections"></div>
-          <ul id="archive-links" class="hidden"></ul>
+          <div id="detail-connected-sections"></div>
+          <p class="muted">선택한 정보는 Nodes 메뉴에서 노드 형태로 확인할 수 있습니다.</p>
         </article>
       </section>
     </main>
@@ -91,6 +74,6 @@
       <small>White/Black minimal UI · English: Helvetica · Korean: Pretendard</small>
     </footer>
 
-    <script src="./app.js"></script>
+    <script src="./search.js"></script>
   </body>
 </html>

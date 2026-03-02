@@ -5,11 +5,11 @@ Music source is now `MusicBrainz + Wikidata + Wikipedia` (no Spotify required).
 
 ## Current Stage
 
-- Stage 1 done: base map UI + node archive view
-- Stage 2 done: live lookup API for music/movie
-- Stage 3 done: expand selected node into connected concept nodes
-- Stage 4 done: dedicated `Home / Map / Archive / Pathways` pages
-- Next stage: refine graph layout and improve pathway ranking logic
+- Stage 1 done: search-first workflow (`Search` page) without map exposure
+- Stage 2 done: separate `Nodes` menu for node-map review
+- Stage 3 done: candidate selection flow for duplicate names
+- Stage 4 done: split search results into `콘텐츠 / 사람`
+- Next stage: music result detail tuning
 
 ## Run
 
@@ -21,6 +21,13 @@ npm run dev
 ```
 
 Open `http://localhost:5500`.
+
+Pages:
+
+- `/map.html`: Search
+- `/nodes.html`: Node map (2D placeholder, future 3D target)
+- `/archive.html`: Saved node archive
+- `/pathways.html`: Generated pathways
 
 ## API
 
