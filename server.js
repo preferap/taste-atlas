@@ -513,7 +513,7 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       links: ["Source: local fallback"],
       connectedSections: [
         {
-          title: "1) Profile",
+          title: "1) Credits",
           items: [{ label: `Query: ${q}`, url: "" }],
         },
         {
@@ -556,58 +556,16 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   const releaseArtistName =
     selectedRelease?.["artist-credit"]?.map((credit) => credit.name).filter(Boolean).join(", ") ||
     artistName;
-
-  const relatedPeople = uniqByName(
-    (detail?.relations || [])
-      .filter((rel) => rel?.["target-type"] === "artist")
-      .map((rel) => ({
-        name: rel.artist?.name,
-        role: rel.type || "related",
-      }))
-      .filter((entry) => entry.name)
-  )
-    .slice(0, 8)
-    .map((entry) => ({
-      label: `${entry.role}: ${entry.name}`,
-      url: buildKnowledgeUrl(entry.name),
-    }));
-
-  const profileGroups = [
-    {
-      title: "아티스트 기본정보",
-      items: [
-        {
-          label: `Artist: ${artistName}`,
-          url: buildKnowledgeUrl(artistName),
-        },
-        { label: `Country: ${detail.country || "n/a"}`, url: "" },
-        { label: `Disambiguation: ${detail.disambiguation || "n/a"}`, url: "" },
-        { label: `Source kind: ${sourceKind}`, url: "" },
-        ...(selectedRelease
-          ? [
-              {
-                label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
-                url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
-              },
-              {
-                label: `Release Artist: ${releaseArtistName || "n/a"}`,
-                url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
-              },
-              {
-                label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
-                url: "",
-              },
-            ]
-          : []),
-      ],
-    },
-    {
-      title: "핵심 참여자/연관 인물",
-      items: relatedPeople.length
-        ? relatedPeople
-        : [{ label: "No structured related-artist metadata found.", url: "" }],
-    },
-  ];
+  const creditsGroups = buildMusicCreditsGroups({
+    artistName,
+    relations: detail?.relations,
+    selectedRelease,
+    releaseNodeTitle,
+    releaseArtistName,
+    sourceKind,
+    country: detail.country || "",
+    disambiguation: detail.disambiguation || "",
+  });
 
   const genreItems = tagNames.map((tag) => ({ label: tag, url: buildKnowledgeUrl(tag) }));
   const releaseItems = topReleases.slice(0, 8).map((release) => ({
@@ -664,7 +622,7 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       "Source: MusicBrainz",
     ],
     connectedSections: [
-      { title: "1) Profile", groups: profileGroups, items: [] },
+      { title: "1) Credits", groups: creditsGroups, items: [] },
       { title: "2) Genres", items: genreItems.slice(0, 12) },
       { title: "3) Discography Highlights", items: releaseItems },
       { title: "4) Artist Signatures", items: signatureItems },
@@ -777,7 +735,10 @@ function coverArtUrl(releaseGroupId) {
 async function fetchMusicBrainzArtist(artistId) {
   const url =
     `https://musicbrainz.org/ws/2/artist/${artistId}?` +
-    new URLSearchParams({ inc: "tags+url-rels+artist-rels", fmt: "json" });
+    new URLSearchParams({
+      inc: "tags+url-rels+artist-rels+label-rels+work-rels+recording-rels",
+      fmt: "json",
+    });
   const response = await fetch(url, { headers: { "User-Agent": "taste-atlas/0.1 (preferap)" } });
   if (!response.ok) {
     throw new Error(`MusicBrainz artist fetch failed (${response.status}).`);
@@ -886,6 +847,173 @@ function uniqByName(items) {
     seen.add(key);
     return true;
   });
+}
+
+function uniqByLabel(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${normalizeText(item?.label)}|${normalizeText(item?.url)}`;
+    if (!item?.label || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildMusicCreditsGroups({
+  artistName,
+  relations,
+  selectedRelease,
+  releaseNodeTitle,
+  releaseArtistName,
+  sourceKind,
+  country,
+  disambiguation,
+}) {
+  const creatorItems = [
+    { label: `Artist: ${artistName}`, url: buildKnowledgeUrl(artistName) },
+    { label: `Country: ${country || "n/a"}`, url: "" },
+    { label: `Disambiguation: ${disambiguation || "n/a"}`, url: "" },
+    { label: `Source kind: ${sourceKind || "artist"}`, url: "" },
+  ];
+  if (selectedRelease) {
+    creatorItems.push(
+      {
+        label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
+        url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
+      },
+      {
+        label: `Release Artist: ${releaseArtistName || "n/a"}`,
+        url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
+      },
+      {
+        label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
+        url: "",
+      }
+    );
+  }
+
+  const productionItems = [];
+  const castItems = [];
+  const crewItems = [];
+
+  const relationList = Array.isArray(relations) ? relations : [];
+  relationList.forEach((rel) => {
+    const role = rel?.type || "related";
+    const roleLower = normalizeText(role);
+    const targetType = rel?.["target-type"];
+    const entity = getMusicRelationEntity(rel);
+    if (!entity.label) {
+      return;
+    }
+    const defaultUrl =
+      targetType === "url" ? entity.url : entity.url || buildKnowledgeUrl(entity.label);
+    const item = { label: `${role}: ${entity.label}`, url: defaultUrl || "" };
+
+    if (isMusicCreatorRole(roleLower) || targetType === "work") {
+      creatorItems.push(item);
+      return;
+    }
+    if (isMusicProductionRole(roleLower) || targetType === "label") {
+      productionItems.push(item);
+      return;
+    }
+    if (isMusicCrewRole(roleLower) || targetType === "recording") {
+      crewItems.push(item);
+      return;
+    }
+    if (targetType === "artist") {
+      castItems.push(item);
+    }
+  });
+
+  return [
+    {
+      title: "감독+각본 대응: 아티스트/작곡",
+      items: uniqByLabel(creatorItems).slice(0, 12),
+    },
+    {
+      title: "제작사+배급사 대응: 제작/레이블",
+      items: uniqByLabel(productionItems).slice(0, 12),
+    },
+    {
+      title: "출연 대응: 피처링/협업",
+      items: uniqByLabel(castItems).slice(0, 12),
+    },
+    {
+      title: "음악+미술+의상 대응: 사운드/비주얼 팀",
+      items: uniqByLabel(crewItems).slice(0, 12),
+    },
+  ].map((group) => ({
+    ...group,
+    items: group.items.length ? group.items : [{ label: "n/a", url: "" }],
+  }));
+}
+
+function getMusicRelationEntity(rel) {
+  if (!rel || typeof rel !== "object") {
+    return { label: "", url: "" };
+  }
+  if (rel["target-type"] === "artist") {
+    return { label: rel.artist?.name || "", url: buildKnowledgeUrl(rel.artist?.name || "") };
+  }
+  if (rel["target-type"] === "label") {
+    return { label: rel.label?.name || "", url: buildKnowledgeUrl(rel.label?.name || "") };
+  }
+  if (rel["target-type"] === "work") {
+    return { label: rel.work?.title || "", url: buildKnowledgeUrl(rel.work?.title || "") };
+  }
+  if (rel["target-type"] === "recording") {
+    return {
+      label: rel.recording?.title || "",
+      url: buildKnowledgeUrl(rel.recording?.title || ""),
+    };
+  }
+  if (rel["target-type"] === "url") {
+    return { label: rel.url?.resource || "", url: rel.url?.resource || "" };
+  }
+  return { label: "", url: "" };
+}
+
+function isMusicCreatorRole(roleLower) {
+  return [
+    "composer",
+    "writer",
+    "lyricist",
+    "arranger",
+    "instrument arranger",
+    "orchestrator",
+    "librettist",
+    "conductor",
+  ].some((token) => roleLower.includes(token));
+}
+
+function isMusicProductionRole(roleLower) {
+  return [
+    "producer",
+    "publisher",
+    "label",
+    "imprint",
+    "distributed",
+    "distribution",
+    "management",
+  ].some((token) => roleLower.includes(token));
+}
+
+function isMusicCrewRole(roleLower) {
+  return [
+    "mix",
+    "master",
+    "engineer",
+    "sound",
+    "art direction",
+    "design",
+    "photography",
+    "video",
+    "visual",
+    "cover art",
+  ].some((token) => roleLower.includes(token));
 }
 
 function buildKnowledgeUrl(name) {
