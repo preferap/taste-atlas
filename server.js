@@ -484,7 +484,7 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     const artistCredit = releaseDetail?.["artist-credit"]?.[0]?.artist;
     if (artistCredit?.id) {
       artistId = artistCredit.id;
-      sourceKind = "artist";
+      sourceKind = "release";
     }
     posterUrl = coverArtUrl(candidateId);
   }
@@ -638,7 +638,9 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     : [];
 
   return {
-    title: selectedRelease ? releaseNodeTitle || artistName : artistName,
+    title: selectedRelease
+      ? `${releaseNodeTitle || artistName}${releaseArtistName ? ` — ${releaseArtistName}` : ""}`
+      : artistName,
     type: "music",
     desc:
       (selectedRelease
@@ -1159,7 +1161,7 @@ async function fetchAwardArticles({ movieTitle, directorName, awards }) {
       return [];
     }
     const xml = await response.text();
-    const items = parseGoogleNewsRss(xml).slice(0, 3);
+    const items = rankAndFilterNewsItems(parseGoogleNewsRss(xml)).slice(0, 3);
     return items.map((item) => ({
       label: `Article: ${item.title}`,
       url: item.link,
@@ -1190,7 +1192,7 @@ async function fetchAwardArticlesForMusic({ artistName, awards }) {
       return [];
     }
     const xml = await response.text();
-    const items = parseGoogleNewsRss(xml).slice(0, 3);
+    const items = rankAndFilterNewsItems(parseGoogleNewsRss(xml)).slice(0, 3);
     return items.map((item) => ({
       label: `Article: ${item.title}`,
       url: item.link,
@@ -1210,6 +1212,50 @@ function parseGoogleNewsRss(xml) {
       return { title, link };
     })
     .filter((item) => item.title && item.link);
+}
+
+function rankAndFilterNewsItems(items) {
+  const seen = new Set();
+  return items
+    .map((item) => {
+      const host = safeHostname(item.link);
+      const title = normalizeText(item.title);
+      let score = 0;
+      if (/[가-힣]/.test(item.title)) {
+        score += 80;
+      }
+      if (host.endsWith(".kr")) {
+        score += 70;
+      }
+      if (host.includes("news.google")) {
+        score -= 20;
+      }
+      if (title.includes("advertisement") || title.includes("sponsored")) {
+        score -= 80;
+      }
+      return { ...item, _score: score, _host: host, _normTitle: title };
+    })
+    .filter((item) => {
+      if (!item._normTitle) {
+        return false;
+      }
+      const key = `${item._host}:${item._normTitle}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b._score - a._score)
+    .map(({ _score, _host, _normTitle, ...item }) => item);
+}
+
+function safeHostname(link) {
+  try {
+    return new URL(link).hostname || "";
+  } catch {
+    return "";
+  }
 }
 
 function extractTag(source, tagName) {

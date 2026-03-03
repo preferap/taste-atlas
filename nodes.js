@@ -5,6 +5,8 @@ const MAP_VIEWBOX = { width: 900, height: 560 };
 const mapEl = document.getElementById("node-map");
 const nodesCountEl = document.getElementById("nodes-count");
 const refreshNodesEl = document.getElementById("refresh-nodes");
+const resetViewEl = document.getElementById("reset-view");
+const nodesFilterEl = document.getElementById("nodes-filter");
 
 const nodesContentResultsEl = document.getElementById("nodes-content-results");
 const nodesPersonResultsEl = document.getElementById("nodes-person-results");
@@ -18,6 +20,11 @@ const nodeDetailDescEl = document.getElementById("node-detail-desc");
 
 let graph = loadGraph();
 let selectedNodeId = null;
+let activeFilter = "all";
+let viewState = { x: 0, y: 0, width: MAP_VIEWBOX.width, height: MAP_VIEWBOX.height };
+let isPanning = false;
+let panStart = null;
+let panViewStart = null;
 
 function loadGraph() {
   const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
@@ -33,6 +40,18 @@ function loadGraph() {
   } catch {
     return { nodes: [], edges: [] };
   }
+}
+
+function getFilteredNodes() {
+  if (activeFilter === "all") {
+    return graph.nodes;
+  }
+  return graph.nodes.filter((node) => node.type === activeFilter);
+}
+
+function getFilteredEdges(filteredNodes) {
+  const ids = new Set(filteredNodes.map((node) => node.id));
+  return graph.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
 }
 
 function recalculateLayout() {
@@ -101,9 +120,12 @@ function renderMap() {
     mapEl.removeChild(mapEl.firstChild);
   }
 
-  graph.edges.forEach((edge) => {
-    const from = graph.nodes.find((node) => node.id === edge.from);
-    const to = graph.nodes.find((node) => node.id === edge.to);
+  const filteredNodes = getFilteredNodes();
+  const filteredEdges = getFilteredEdges(filteredNodes);
+
+  filteredEdges.forEach((edge) => {
+    const from = filteredNodes.find((node) => node.id === edge.from);
+    const to = filteredNodes.find((node) => node.id === edge.to);
     if (!from || !to) {
       return;
     }
@@ -119,7 +141,7 @@ function renderMap() {
     mapEl.appendChild(line);
   });
 
-  graph.nodes.forEach((node) => {
+  filteredNodes.forEach((node) => {
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -145,7 +167,15 @@ function renderMap() {
     mapEl.appendChild(group);
   });
 
-  nodesCountEl.textContent = `${graph.nodes.length} nodes`;
+  nodesCountEl.textContent = `${filteredNodes.length} nodes`;
+  applyViewBox();
+}
+
+function applyViewBox() {
+  mapEl.setAttribute(
+    "viewBox",
+    `${viewState.x} ${viewState.y} ${viewState.width} ${viewState.height}`
+  );
 }
 
 function openNode(node) {
@@ -228,6 +258,60 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function resetView() {
+  viewState = { x: 0, y: 0, width: MAP_VIEWBOX.width, height: MAP_VIEWBOX.height };
+  applyViewBox();
+}
+
+function setupPanZoom() {
+  mapEl.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const scale = event.deltaY > 0 ? 1.08 : 0.92;
+
+    const rect = mapEl.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width;
+    const py = (event.clientY - rect.top) / rect.height;
+    const mouseX = viewState.x + viewState.width * px;
+    const mouseY = viewState.y + viewState.height * py;
+
+    const nextWidth = clamp(viewState.width * scale, 240, MAP_VIEWBOX.width * 2);
+    const nextHeight = clamp(viewState.height * scale, 180, MAP_VIEWBOX.height * 2);
+
+    viewState.x = mouseX - nextWidth * px;
+    viewState.y = mouseY - nextHeight * py;
+    viewState.width = nextWidth;
+    viewState.height = nextHeight;
+
+    applyViewBox();
+  });
+
+  mapEl.addEventListener("mousedown", (event) => {
+    isPanning = true;
+    panStart = { x: event.clientX, y: event.clientY };
+    panViewStart = { ...viewState };
+    mapEl.style.cursor = "grabbing";
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!isPanning || !panStart || !panViewStart) {
+      return;
+    }
+    const rect = mapEl.getBoundingClientRect();
+    const dx = ((event.clientX - panStart.x) / rect.width) * panViewStart.width;
+    const dy = ((event.clientY - panStart.y) / rect.height) * panViewStart.height;
+    viewState.x = panViewStart.x - dx;
+    viewState.y = panViewStart.y - dy;
+    applyViewBox();
+  });
+
+  window.addEventListener("mouseup", () => {
+    isPanning = false;
+    panStart = null;
+    panViewStart = null;
+    mapEl.style.cursor = "default";
+  });
+}
+
 function initialize() {
   graph = loadGraph();
   recalculateLayout();
@@ -236,5 +320,11 @@ function initialize() {
 }
 
 refreshNodesEl.addEventListener("click", initialize);
+resetViewEl.addEventListener("click", resetView);
+nodesFilterEl.addEventListener("change", (event) => {
+  activeFilter = event.target.value;
+  renderMap();
+});
 
+setupPanZoom();
 initialize();

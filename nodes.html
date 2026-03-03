@@ -29,8 +29,15 @@
         <div class="panel-head">
           <h2>Node Map (2D Placeholder)</h2>
           <div class="panel-actions">
+            <select id="nodes-filter" class="ghost-select">
+              <option value="all">All</option>
+              <option value="movie">Movie</option>
+              <option value="music">Music</option>
+              <option value="concept">Concept</option>
+            </select>
             <span id="nodes-count" class="muted">0 nodes</span>
             <button id="refresh-nodes" type="button" class="ghost-button">Refresh</button>
+            <button id="reset-view" type="button" class="ghost-button">Reset View</button>
           </div>
         </div>
         <svg id="node-map" viewBox="0 0 900 560" aria-label="node map"></svg>
