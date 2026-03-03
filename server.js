@@ -557,30 +557,56 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     selectedRelease?.["artist-credit"]?.map((credit) => credit.name).filter(Boolean).join(", ") ||
     artistName;
 
-  const profileItems = [
+  const relatedPeople = uniqByName(
+    (detail?.relations || [])
+      .filter((rel) => rel?.["target-type"] === "artist")
+      .map((rel) => ({
+        name: rel.artist?.name,
+        role: rel.type || "related",
+      }))
+      .filter((entry) => entry.name)
+  )
+    .slice(0, 8)
+    .map((entry) => ({
+      label: `${entry.role}: ${entry.name}`,
+      url: buildKnowledgeUrl(entry.name),
+    }));
+
+  const profileGroups = [
     {
-      label: `Artist: ${artistName}`,
-      url: buildKnowledgeUrl(artistName),
+      title: "아티스트 기본정보",
+      items: [
+        {
+          label: `Artist: ${artistName}`,
+          url: buildKnowledgeUrl(artistName),
+        },
+        { label: `Country: ${detail.country || "n/a"}`, url: "" },
+        { label: `Disambiguation: ${detail.disambiguation || "n/a"}`, url: "" },
+        { label: `Source kind: ${sourceKind}`, url: "" },
+        ...(selectedRelease
+          ? [
+              {
+                label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
+                url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
+              },
+              {
+                label: `Release Artist: ${releaseArtistName || "n/a"}`,
+                url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
+              },
+              {
+                label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
+                url: "",
+              },
+            ]
+          : []),
+      ],
     },
-    { label: `Country: ${detail.country || "n/a"}`, url: "" },
-    { label: `Disambiguation: ${detail.disambiguation || "n/a"}`, url: "" },
-    { label: `Source kind: ${sourceKind}`, url: "" },
-    ...(selectedRelease
-      ? [
-          {
-            label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
-            url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
-          },
-          {
-            label: `Release Artist: ${releaseArtistName || "n/a"}`,
-            url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
-          },
-          {
-            label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
-            url: "",
-          },
-        ]
-      : []),
+    {
+      title: "핵심 참여자/연관 인물",
+      items: relatedPeople.length
+        ? relatedPeople
+        : [{ label: "No structured related-artist metadata found.", url: "" }],
+    },
   ];
 
   const genreItems = tagNames.map((tag) => ({ label: tag, url: buildKnowledgeUrl(tag) }));
@@ -588,18 +614,28 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     label: `${release.title} (${release["first-release-date"] || "n/a"})`,
     url: buildKnowledgeUrl(release.title),
   }));
+  const artistSignatureProfile = await buildArtistSignatureProfile({
+    artistName,
+    referenceWork: selectedRelease?.title || topReleases[0]?.title || "",
+    artistSummary: wikiSummary || wikidataDesc || "",
+  });
   const signatureItems = [
-    {
-      label: buildAcademicArtistSignature({
-        artistName,
-        summary: wikiSummary || wikidataDesc,
-      }),
-      url: "",
-    },
+    { label: `Style: ${artistSignatureProfile.style}`, url: "" },
+    { label: `Themes: ${artistSignatureProfile.themes}`, url: "" },
+    { label: `Form: ${artistSignatureProfile.form}`, url: "" },
+    { label: `Critical Reception: ${artistSignatureProfile.criticalReception}`, url: "" },
+    { label: `Landmark Works: ${artistSignatureProfile.landmarkWorks}`, url: "" },
+    { label: `Study Guide: ${artistSignatureProfile.studyGuide}`, url: "" },
   ];
   const awardItems = awards.length
     ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
     : [{ label: "No award records found in open data.", url: "" }];
+  const awardArticleItems = awards.length
+    ? await fetchAwardArticlesForMusic({
+        artistName,
+        awards,
+      })
+    : [];
 
   return {
     title: selectedRelease ? releaseNodeTitle || artistName : artistName,
@@ -626,11 +662,11 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       "Source: MusicBrainz",
     ],
     connectedSections: [
-      { title: "1) Profile", items: profileItems },
+      { title: "1) Profile", groups: profileGroups, items: [] },
       { title: "2) Genres", items: genreItems.slice(0, 12) },
       { title: "3) Discography Highlights", items: releaseItems },
       { title: "4) Artist Signatures", items: signatureItems },
-      { title: "5) Awards", items: awardItems.slice(0, 20) },
+      { title: "5) Awards", items: [...awardItems.slice(0, 10), ...awardArticleItems.slice(0, 3)] },
     ],
     posterUrl,
   };
@@ -739,7 +775,7 @@ function coverArtUrl(releaseGroupId) {
 async function fetchMusicBrainzArtist(artistId) {
   const url =
     `https://musicbrainz.org/ws/2/artist/${artistId}?` +
-    new URLSearchParams({ inc: "tags+url-rels", fmt: "json" });
+    new URLSearchParams({ inc: "tags+url-rels+artist-rels", fmt: "json" });
   const response = await fetch(url, { headers: { "User-Agent": "taste-atlas/0.1 (preferap)" } });
   if (!response.ok) {
     throw new Error(`MusicBrainz artist fetch failed (${response.status}).`);
@@ -871,6 +907,86 @@ function firstSentence(text) {
 function buildAcademicArtistSignature({ artistName, summary }) {
   const base = firstSentence(summary) || `${artistName}는 동시대 대중음악 담론에서 중요한 참조점으로 호출된다.`;
   return `${base} 이 아티스트의 미학은 장르의 경계를 고정하기보다 사운드 문법을 갱신하는 방식으로 작동한다. 평단은 작품 간 연속성과 단절의 배치를 통해 시대적 감수성을 조직한다는 점을 주목한다. 따라서 학습 과정에서는 대표작 단위가 아니라 시기별 앨범군의 변화를 구조적으로 읽는 접근이 적절하다.`;
+}
+
+async function buildArtistSignatureProfile({
+  artistName,
+  referenceWork,
+  artistSummary,
+}) {
+  const fallback = buildFallbackArtistProfile({
+    artistName,
+    referenceWork,
+    artistSummary,
+  });
+
+  if (!process.env.OPENAI_API_KEY || !artistName) {
+    return fallback;
+  }
+
+  try {
+    const prompt = [
+      "당신은 음악연구 조교수다.",
+      "아래 아티스트에 대해 학술형 한국어 요약을 작성하라.",
+      "각 항목은 정확히 4문장으로 구성하라.",
+      "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
+      "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
+      `아티스트: ${artistName}`,
+      `대표 참고작: ${referenceWork || "n/a"}`,
+      `참고 요약 자료: ${artistSummary || "n/a"}`,
+    ].join("\n");
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        input: prompt,
+      }),
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const data = await response.json();
+    const text = extractResponseText(data);
+    const parsed = parseJsonObject(text);
+    if (!parsed) {
+      return fallback;
+    }
+
+    return {
+      style: ensureSentenceCount(parsed.style, 4) || fallback.style,
+      themes: ensureSentenceCount(parsed.themes, 4) || fallback.themes,
+      form: ensureSentenceCount(parsed.form, 4) || fallback.form,
+      criticalReception:
+        ensureSentenceCount(parsed.criticalReception, 4) || fallback.criticalReception,
+      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 4) || fallback.landmarkWorks,
+      studyGuide: ensureSentenceCount(parsed.studyGuide, 4) || fallback.studyGuide,
+    };
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function buildFallbackArtistProfile({ artistName, referenceWork, artistSummary }) {
+  const artist = artistName || "이 아티스트";
+  const work = referenceWork || "대표작";
+  const summaryHead =
+    firstSentence(artistSummary) || `${artist}는 장르 실험과 시대 감수성의 결합으로 평가된다.`;
+
+  return {
+    style: `${summaryHead} 사운드 디자인의 핵심은 장르 규범을 인용하되 반복적으로 변형하는 전략에 있다. 음색과 리듬의 대비를 통해 청취 경험의 긴장을 조직한다. 이러한 스타일은 대중성과 실험성의 경계를 가로지르는 중층적 미학으로 읽힌다.`,
+    themes: `${artist}의 핵심 주제는 정체성, 기술환경, 감정의 거리감처럼 현대적 불안의 정동을 다룬다. 가사는 개인 서사와 사회적 맥락을 교차시키며 다층적 의미를 생산한다. 주제의 반복은 작품 간 통일성을 만들되 시대별 해석의 폭을 열어둔다. 결과적으로 청자는 동일한 키워드를 다른 사운드 문법으로 재경험하게 된다.`,
+    form: `${artist}의 형식적 특성은 곡 단위 완결보다 앨범 단위 구조화를 중시하는 데 있다. 편곡은 정적 구간과 밀도 높은 구간을 교차시키며 서사적 호흡을 만든다. 프로덕션의 질감 선택은 주제의 추상도를 조절하는 핵심 장치로 기능한다. 따라서 형식은 내용의 전달을 넘어 해석의 방향 자체를 조직한다.`,
+    criticalReception: `${artist}에 대한 평단 평가는 대체로 장르 재구성과 사운드 혁신의 지속성을 높이 평가한다. 반면 일부 비평은 난해성이나 접근성의 문제를 한계로 지적한다. 그럼에도 다수의 논의는 동시대 음악문법의 변화를 추동한 영향력을 핵심 근거로 제시한다. 최근 평가에서는 스트리밍 환경에서 작품 단위 감상의 가치가 어떻게 재정의되는지도 중요한 쟁점이다.`,
+    landmarkWorks: `${artist}의 대표작은 시기별 미학적 전환점을 선명하게 보여주는 레퍼런스로 기능한다. ${work}는 그 전환을 집약적으로 확인할 수 있는 사례로 반복 인용된다. 초기작과 중기작, 후기작을 비교하면 동일한 문제의식이 다른 프로덕션 문법으로 변주되는 양상이 드러난다. 따라서 대표작 읽기는 개별 히트곡보다 앨범 연속체를 기준으로 수행하는 편이 타당하다.`,
+    studyGuide: `첫 단계에서는 ${work}를 중심으로 트랙 배열과 사운드 층위를 분석해 기본 문법을 파악한다. 두 번째 단계에서는 전후기 앨범을 비교해 형식 변화와 주제의 지속성을 기록한다. 세 번째 단계에서는 동시대 아티스트와의 상호영향 관계를 도식화해 위치를 검증한다. 마지막으로 평론문과 인터뷰를 교차독해해 청취 경험과 비평 언어의 간극을 점검한다.`,
+  };
 }
 
 async function buildDirectorSignatureProfile({
@@ -1032,6 +1148,37 @@ async function fetchAwardArticles({ movieTitle, directorName, awards }) {
     "https://news.google.com/rss/search?" +
     new URLSearchParams({
       q: `${queryTerms} award`,
+      hl: "ko",
+      gl: "KR",
+      ceid: "KR:ko",
+    });
+
+  try {
+    const response = await fetch(rssUrl);
+    if (!response.ok) {
+      return [];
+    }
+    const xml = await response.text();
+    const items = parseGoogleNewsRss(xml).slice(0, 3);
+    return items.map((item) => ({
+      label: `Article: ${item.title}`,
+      url: item.link,
+    }));
+  } catch (_error) {
+    return [];
+  }
+}
+
+async function fetchAwardArticlesForMusic({ artistName, awards }) {
+  const queryTerms = [artistName, ...awards.slice(0, 2)].filter(Boolean).join(" ");
+  if (!queryTerms) {
+    return [];
+  }
+
+  const rssUrl =
+    "https://news.google.com/rss/search?" +
+    new URLSearchParams({
+      q: `${queryTerms} music award`,
       hl: "ko",
       gl: "KR",
       ceid: "KR:ko",
