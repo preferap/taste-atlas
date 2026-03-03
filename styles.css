@@ -310,15 +310,16 @@ ul {
 }
 
 .connected-group {
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-md);
-  padding: 10px;
-  margin-bottom: 8px;
+  padding: 0;
+  margin-bottom: 12px;
 }
 
 .connected-group h5 {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 300;
 }
 
 .connected-group ul {
@@ -465,7 +466,7 @@ ul {
 }
 
 .search-shell.active .hero-copy {
-  margin-top: 0;
+  display: none;
 }
 
 .search-shell .search-results {
@@ -635,30 +636,40 @@ ul {
 
 .info-stage h3 {
   margin: 0 0 16px;
-  font-size: clamp(42px, 4vw, 56px);
+  font-size: clamp(21px, 2vw, 28px);
   line-height: 1;
   font-style: italic;
-  font-weight: 700;
+  font-weight: 300;
 }
 
 .info-stage #detail-card h4 {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: 14px;
   line-height: 1.1;
+  font-weight: 300;
 }
 
 .info-stage #detail-card h5 {
   margin: 18px 0 10px;
-  font-size: 22px;
+  font-size: 11px;
   font-style: italic;
+  font-weight: 300;
 }
 
 .info-stage .muted,
 .info-stage #detail-desc,
 .info-stage li,
 .info-stage p {
-  font-size: clamp(18px, 1.45vw, 21px);
+  font-size: clamp(9px, 0.72vw, 11px);
   line-height: 1.45;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+}
+
+.info-stage #detail-card,
+.info-stage #detail-card * {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
 }
 
 .info-stage .archive-poster {

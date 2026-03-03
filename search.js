@@ -175,15 +175,17 @@ async function selectCandidate(candidate) {
 }
 
 function normalizeNode(node) {
+  const type = node.type || activeType;
+  const rawSections = Array.isArray(node.connectedSections) ? node.connectedSections : [];
   return {
     ...node,
-    type: node.type || activeType,
+    type,
     path: Array.isArray(node.path) ? node.path : [],
     links: Array.isArray(node.links) ? node.links : [],
-    connectedSections: Array.isArray(node.connectedSections) ? node.connectedSections : [],
+    connectedSections: type === "music" ? sanitizeMusicSections(rawSections) : rawSections,
     depth: 0,
     parentId: null,
-    branchGroup: node.type || activeType,
+    branchGroup: type,
   };
 }
 
@@ -207,7 +209,9 @@ function saveNode(node) {
 }
 
 function renderDetail(node) {
-  detailEmptyEl.classList.add("hidden");
+  if (detailEmptyEl) {
+    detailEmptyEl.classList.add("hidden");
+  }
   detailCardEl.classList.remove("hidden");
 
   detailTitleEl.textContent = node.title;
@@ -228,7 +232,7 @@ function renderDetail(node) {
     wrapper.className = "connected-group";
 
     const title = document.createElement("h5");
-    title.textContent = section.title;
+    title.textContent = `+ ${section.title}`;
     wrapper.appendChild(title);
 
     const groups = Array.isArray(section.groups) ? section.groups : [];
@@ -321,6 +325,111 @@ function loadGraph() {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function sanitizeMusicSections(sections) {
+  const expectedTitles = [
+    "1) Artists",
+    "2) Artist Signatures",
+    "3) Album",
+    "4) Discography Highlights",
+    "5) Genres + Era",
+  ];
+  const byTitle = new Map(
+    (Array.isArray(sections) ? sections : []).map((section) => [String(section.title || ""), section])
+  );
+  const hasExpected = expectedTitles.every((title) => byTitle.has(title));
+  if (hasExpected) {
+    return expectedTitles.map((title) => ({
+      title,
+      items: sanitizeMusicItems(flattenSectionItems(byTitle.get(title))),
+    }));
+  }
+
+  const flat = (Array.isArray(sections) ? sections : []).flatMap((section) =>
+    flattenSectionItems(section).map((item) => ({
+      ...item,
+      _section: String(section?.title || ""),
+    }))
+  );
+  const artistMatch = flat
+    .map((item) => String(item.label || ""))
+    .find((label) => /^Artist:\s*/i.test(label));
+  const artistName = artistMatch ? artistMatch.replace(/^Artist:\s*/i, "").trim() : "n/a";
+
+  const signatureItems = flat.filter((item) =>
+    /style:|themes:|form:|critical reception:|landmark works:|study guide:/i.test(
+      String(item.label || "")
+    )
+  );
+  const albumItems = flat.filter((item) =>
+    /selected release:|release artist:|release date:|album:|first release date:/i.test(
+      String(item.label || "")
+    )
+  );
+  const discographyItems = flat.filter((item) =>
+    /\(\d{4}|\(\d{4}-\d{2}-\d{2}/.test(String(item.label || ""))
+  );
+  const genreItems = flat.filter((item) =>
+    /genre|pop|rock|hip hop|hiphop|jazz|electronic|rnb|soul|indie|kpop/i.test(
+      String(item.label || "")
+    )
+  );
+
+  return [
+    {
+      title: "1) Artists",
+      items: [{ label: `Primary Artist: ${artistName}`, url: "" }],
+    },
+    {
+      title: "2) Artist Signatures",
+      items: sanitizeMusicItems(signatureItems).slice(0, 6),
+    },
+    {
+      title: "3) Album",
+      items: sanitizeMusicItems(albumItems).slice(0, 6),
+    },
+    {
+      title: "4) Discography Highlights",
+      items: sanitizeMusicItems(discographyItems).slice(0, 10),
+    },
+    {
+      title: "5) Genres + Era",
+      items: sanitizeMusicItems(genreItems).slice(0, 10),
+    },
+  ].map((section) => ({
+    ...section,
+    items: section.items.length ? section.items : [{ label: "n/a", url: "" }],
+  }));
+}
+
+function flattenSectionItems(section) {
+  const groups = Array.isArray(section?.groups) ? section.groups : [];
+  const groupItems = groups.flatMap((group) =>
+    Array.isArray(group?.items) ? group.items : []
+  );
+  const items = Array.isArray(section?.items) ? section.items : [];
+  return [...groupItems, ...items];
+}
+
+function sanitizeMusicItems(items) {
+  const blocked = [
+    "감독+각본 대응",
+    "제작사+배급사 대응",
+    "출연 대응",
+    "음악+미술+의상 대응",
+    "country:",
+    "disambiguation:",
+    "source kind:",
+    "recording contract:",
+    "vocal:",
+  ];
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && (item.label || item.name))
+    .filter((item) => {
+      const text = normalizeText(item.label || item.name);
+      return !blocked.some((token) => text.includes(normalizeText(token)));
+    });
 }
 
 async function checkSourceHealth() {
