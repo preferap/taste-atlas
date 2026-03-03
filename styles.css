@@ -4,6 +4,10 @@
   --muted: #666666;
   --line: #b7b7b7;
   --panel: #f7f7f7;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
 }
 
 * {
@@ -51,7 +55,7 @@ body {
   color: var(--fg);
   text-decoration: none;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   padding: 6px 12px;
   font-size: 13px;
 }
@@ -85,7 +89,7 @@ body {
   color: var(--fg);
   text-decoration: none;
   border: 1px solid var(--fg);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
 }
 
@@ -114,7 +118,7 @@ body {
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -132,7 +136,7 @@ body {
   margin: 8px 0 12px;
   font-size: 13px;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
 }
 
@@ -168,7 +172,7 @@ select,
 button {
   font: inherit;
   border: 1px solid var(--fg);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   background: #fff;
   color: var(--fg);
@@ -189,7 +193,7 @@ button:hover {
 }
 
 .chip {
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   padding: 8px 12px;
   border-color: var(--line);
 }
@@ -220,7 +224,7 @@ button:hover {
 .ghost-select {
   font-size: 12px;
   padding: 5px 8px;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: #fff;
 }
@@ -230,7 +234,7 @@ button:hover {
   height: 100%;
   min-height: 500px;
   border: 1px dashed var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background-image: linear-gradient(#fafafa, #ffffff);
 }
 
@@ -239,7 +243,7 @@ button:hover {
   height: 100%;
   min-height: 500px;
   border: 1px dashed var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background-image: linear-gradient(#fafafa, #ffffff);
 }
 
@@ -251,7 +255,7 @@ button:hover {
   display: inline-block;
   margin: 0 0 10px;
   border: 1px solid var(--fg);
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   padding: 2px 8px;
   font-size: 12px;
 }
@@ -275,7 +279,7 @@ ul {
 
 .archive-item {
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 12px;
 }
 
@@ -297,7 +301,7 @@ ul {
 
 .pathway-card {
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 12px;
 }
 
@@ -307,7 +311,7 @@ ul {
 
 .connected-group {
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 10px;
   margin-bottom: 8px;
 }
@@ -356,7 +360,7 @@ ul {
 
 .search-result-item {
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 8px;
   display: grid;
   grid-template-columns: 72px 1fr auto;
@@ -368,7 +372,7 @@ ul {
   width: 72px;
   height: 108px;
   object-fit: contain;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: #f2f2f2;
 }
@@ -393,7 +397,7 @@ ul {
   width: min(260px, 100%);
   max-height: 420px;
   object-fit: contain;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   margin: 8px 0;
   background: #f2f2f2;
@@ -535,7 +539,7 @@ ul {
 .floating-head .top-nav a {
   border-color: #1e1e1e;
   text-transform: lowercase;
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   background: transparent;
   font-size: 14px;
   padding: 6px 16px;
@@ -580,7 +584,7 @@ ul {
 }
 
 .floating-search .type-btn {
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   border: 1px solid #1e1e1e;
   padding: 6px 18px;
   background: transparent;
@@ -666,7 +670,7 @@ ul {
 }
 
 .map-page .badge {
-  border-radius: 0;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   letter-spacing: 0.08em;
 }
