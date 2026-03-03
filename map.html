@@ -11,69 +11,68 @@
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
-    <header class="site-header">
-      <h1>Taste Atlas</h1>
-      <p>검색/정보 확인 전용 화면 (노드맵 미노출)</p>
-      <nav class="top-nav">
-        <a href="./index.html">Home</a>
-        <a href="./map.html" class="active">Search</a>
-        <a href="./nodes.html">Nodes</a>
-        <a href="./archive.html">Archive</a>
-        <a href="./pathways.html">Pathways</a>
-      </nav>
-    </header>
-
-    <main class="search-layout">
-      <section class="panel search-panel">
-        <h2>Search</h2>
-        <p id="source-status" class="status">Checking data sources...</p>
-
-        <div class="type-buttons">
-          <button id="type-movie" type="button" class="type-btn active">Movie</button>
-          <button id="type-music" type="button" class="type-btn">Music</button>
+  <body class="map-page">
+    <main id="search-shell" class="search-shell idle">
+      <section class="left-stage">
+        <div class="hero-copy">
+          <h1>Explore and Map your</h1>
+          <p>Taste Atlas +</p>
         </div>
-
-        <form id="taste-form">
-          <label for="title">Title / Person</label>
-          <input id="title" name="title" placeholder="예: 기생충 / 봉준호 / Radiohead" />
-          <button type="submit">Search</button>
-        </form>
 
         <section id="search-results" class="search-results hidden">
           <h3>Search Results</h3>
           <div class="result-columns">
             <div>
-              <h4>콘텐츠</h4>
+              <h4 id="content-result-heading">Content</h4>
               <ul id="content-result-list" class="search-result-list"></ul>
             </div>
             <div>
-              <h4>사람</h4>
+              <h4 id="person-result-heading">People</h4>
               <ul id="person-result-list" class="search-result-list"></ul>
             </div>
           </div>
         </section>
       </section>
 
-      <section class="panel detail-panel">
-        <h2>Info</h2>
-        <div id="detail-empty" class="muted">검색 결과에서 `Select`를 누르면 상세 정보가 보입니다.</div>
-        <article id="detail-card" class="hidden">
-          <h3 id="detail-title"></h3>
-          <p id="detail-type" class="badge"></p>
-          <img id="detail-poster" class="archive-poster hidden" alt="poster" />
-          <p id="detail-desc"></p>
-          <h4>Connected To</h4>
-          <div id="detail-connected-sections"></div>
-          <p class="muted">선택한 정보는 Nodes 메뉴에서 노드 형태로 확인할 수 있습니다.</p>
-        </article>
+      <section class="right-stage">
+        <header class="floating-head">
+          <h2>Taste Atlas</h2>
+          <nav class="top-nav">
+            <a href="./map.html" class="active">search</a>
+            <a href="./nodes.html">node</a>
+            <a href="./archive.html">archive</a>
+          </nav>
+        </header>
+
+        <section class="floating-search">
+          <p id="source-status" class="status">Checking data sources...</p>
+          <form id="taste-form">
+            <div class="type-buttons">
+              <button id="type-movie" type="button" class="type-btn active">film</button>
+              <button id="type-music" type="button" class="type-btn">music</button>
+            </div>
+            <div class="search-row">
+              <label for="title" class="sr-only">Search</label>
+              <input id="title" name="title" placeholder="Search title / director / artist / album" />
+              <button type="submit" class="search-icon" aria-label="search">⌕</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="info-stage">
+          <h3>info</h3>
+          <div id="detail-empty" class="muted">검색 후 결과를 선택하면 정보가 표시됩니다.</div>
+          <article id="detail-card" class="hidden">
+            <h4 id="detail-title"></h4>
+            <p id="detail-type" class="badge"></p>
+            <img id="detail-poster" class="archive-poster hidden" alt="poster" />
+            <p id="detail-desc"></p>
+            <h5>Connected To</h5>
+            <div id="detail-connected-sections"></div>
+          </article>
+        </section>
       </section>
     </main>
-
-    <footer class="site-footer">
-      <small>White/Black minimal UI · English: Helvetica · Korean: Pretendard</small>
-    </footer>
-
     <script src="./search.js"></script>
   </body>
 </html>

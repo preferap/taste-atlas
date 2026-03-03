@@ -513,19 +513,23 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       links: ["Source: local fallback"],
       connectedSections: [
         {
-          title: "1) Credits",
+          title: "1) Artists",
           items: [{ label: `Query: ${q}`, url: "" }],
         },
         {
-          title: "2) Genres",
+          title: "2) Artist Signatures",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "3) Artist Signatures",
+          title: "3) Album",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "4) Awards",
+          title: "4) Discography Highlights",
+          items: [{ label: "n/a", url: "" }],
+        },
+        {
+          title: "5) Genres + Era",
           items: [{ label: "n/a", url: "" }],
         },
       ],
@@ -549,25 +553,26 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   const wikiSummary = await fetchWikipediaSummary(detail.name);
   const wikidataDesc = await fetchWikidataDescription(detail?.relations);
   const tagNames = (detail?.tags || []).slice(0, 10).map((tag) => tag.name);
-  const { awards } = await fetchWikidataMetaFromRelations(detail?.relations);
   const topReleases = await fetchMusicBrainzReleaseGroupsByArtist(artistId);
   const artistName = detail.name;
   const releaseNodeTitle = selectedRelease?.title || "";
   const releaseArtistName =
     selectedRelease?.["artist-credit"]?.map((credit) => credit.name).filter(Boolean).join(", ") ||
     artistName;
-  const creditsGroups = buildMusicCreditsGroups({
+  const artistItems = buildMusicArtistItems({
     artistName,
     relations: detail?.relations,
-    selectedRelease,
-    releaseNodeTitle,
-    releaseArtistName,
-    sourceKind,
     country: detail.country || "",
     disambiguation: detail.disambiguation || "",
   });
-
-  const genreItems = tagNames.map((tag) => ({ label: tag, url: buildKnowledgeUrl(tag) }));
+  const albumItems = buildMusicAlbumItems({
+    selectedRelease,
+    releaseNodeTitle,
+    releaseArtistName,
+    topReleases,
+    sourceKind,
+  });
+  const genreItems = buildGenreEraItems(tagNames);
   const releaseItems = topReleases.slice(0, 8).map((release) => ({
     label: `${release.title} (${release["first-release-date"] || "n/a"})`,
     url: buildKnowledgeUrl(release.title),
@@ -585,15 +590,6 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     { label: `Landmark Works: ${artistSignatureProfile.landmarkWorks}`, url: "" },
     { label: `Study Guide: ${artistSignatureProfile.studyGuide}`, url: "" },
   ];
-  const awardItems = awards.length
-    ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
-    : [{ label: "No award records found in open data.", url: "" }];
-  const awardArticleItems = awards.length
-    ? await fetchAwardArticlesForMusic({
-        artistName,
-        awards,
-      })
-    : [];
 
   return {
     title: selectedRelease
@@ -622,11 +618,11 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       "Source: MusicBrainz",
     ],
     connectedSections: [
-      { title: "1) Credits", groups: creditsGroups, items: [] },
-      { title: "2) Genres", items: genreItems.slice(0, 12) },
-      { title: "3) Discography Highlights", items: releaseItems },
-      { title: "4) Artist Signatures", items: signatureItems },
-      { title: "5) Awards", items: [...awardItems.slice(0, 10), ...awardArticleItems.slice(0, 3)] },
+      { title: "1) Artists", items: artistItems.slice(0, 12) },
+      { title: "2) Artist Signatures", items: signatureItems },
+      { title: "3) Album", items: albumItems.slice(0, 8) },
+      { title: "4) Discography Highlights", items: releaseItems },
+      { title: "5) Genres + Era", items: genreItems.slice(0, 12) },
     ],
     posterUrl,
   };
@@ -861,159 +857,96 @@ function uniqByLabel(items) {
   });
 }
 
-function buildMusicCreditsGroups({
-  artistName,
-  relations,
+function buildMusicArtistItems({ artistName, relations, country, disambiguation }) {
+  const members = uniqByLabel(
+    (Array.isArray(relations) ? relations : [])
+      .filter((rel) => rel?.["target-type"] === "artist")
+      .filter((rel) => normalizeText(rel?.type).includes("member"))
+      .map((rel) => ({
+        label: `Member: ${rel.artist?.name || ""}`,
+        url: buildKnowledgeUrl(rel.artist?.name || ""),
+      }))
+  );
+  return [
+    { label: `Primary Artist: ${artistName}`, url: buildKnowledgeUrl(artistName) },
+    { label: `Country: ${country || "n/a"}`, url: "" },
+    { label: `Disambiguation: ${disambiguation || "n/a"}`, url: "" },
+    ...members.slice(0, 10),
+  ];
+}
+
+function buildMusicAlbumItems({
   selectedRelease,
   releaseNodeTitle,
   releaseArtistName,
+  topReleases,
   sourceKind,
-  country,
-  disambiguation,
 }) {
-  const creatorItems = [
-    { label: `Artist: ${artistName}`, url: buildKnowledgeUrl(artistName) },
-    { label: `Country: ${country || "n/a"}`, url: "" },
-    { label: `Disambiguation: ${disambiguation || "n/a"}`, url: "" },
-    { label: `Source kind: ${sourceKind || "artist"}`, url: "" },
-  ];
   if (selectedRelease) {
-    creatorItems.push(
+    return [
       {
-        label: `Selected Release: ${releaseNodeTitle || "n/a"}`,
+        label: `Album: ${releaseNodeTitle || "n/a"}`,
         url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
       },
       {
-        label: `Release Artist: ${releaseArtistName || "n/a"}`,
+        label: `Artist: ${releaseArtistName || "n/a"}`,
         url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
       },
       {
-        label: `Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
+        label: `First Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
         url: "",
-      }
-    );
+      },
+      { label: `Source kind: ${sourceKind || "release"}`, url: "" },
+    ];
   }
-
-  const productionItems = [];
-  const castItems = [];
-  const crewItems = [];
-
-  const relationList = Array.isArray(relations) ? relations : [];
-  relationList.forEach((rel) => {
-    const role = rel?.type || "related";
-    const roleLower = normalizeText(role);
-    const targetType = rel?.["target-type"];
-    const entity = getMusicRelationEntity(rel);
-    if (!entity.label) {
-      return;
-    }
-    const defaultUrl =
-      targetType === "url" ? entity.url : entity.url || buildKnowledgeUrl(entity.label);
-    const item = { label: `${role}: ${entity.label}`, url: defaultUrl || "" };
-
-    if (isMusicCreatorRole(roleLower) || targetType === "work") {
-      creatorItems.push(item);
-      return;
-    }
-    if (isMusicProductionRole(roleLower) || targetType === "label") {
-      productionItems.push(item);
-      return;
-    }
-    if (isMusicCrewRole(roleLower) || targetType === "recording") {
-      crewItems.push(item);
-      return;
-    }
-    if (targetType === "artist") {
-      castItems.push(item);
-    }
-  });
-
+  const lead = topReleases[0];
   return [
     {
-      title: "감독+각본 대응: 아티스트/작곡",
-      items: uniqByLabel(creatorItems).slice(0, 12),
+      label: `Album: ${lead?.title || "n/a"}`,
+      url: lead?.title ? buildKnowledgeUrl(lead.title) : "",
     },
     {
-      title: "제작사+배급사 대응: 제작/레이블",
-      items: uniqByLabel(productionItems).slice(0, 12),
+      label: `First Release Date: ${lead?.["first-release-date"] || "n/a"}`,
+      url: "",
     },
-    {
-      title: "출연 대응: 피처링/협업",
-      items: uniqByLabel(castItems).slice(0, 12),
-    },
-    {
-      title: "음악+미술+의상 대응: 사운드/비주얼 팀",
-      items: uniqByLabel(crewItems).slice(0, 12),
-    },
-  ].map((group) => ({
-    ...group,
-    items: group.items.length ? group.items : [{ label: "n/a", url: "" }],
-  }));
+    { label: `Source kind: ${sourceKind || "artist"}`, url: "" },
+  ];
 }
 
-function getMusicRelationEntity(rel) {
-  if (!rel || typeof rel !== "object") {
-    return { label: "", url: "" };
-  }
-  if (rel["target-type"] === "artist") {
-    return { label: rel.artist?.name || "", url: buildKnowledgeUrl(rel.artist?.name || "") };
-  }
-  if (rel["target-type"] === "label") {
-    return { label: rel.label?.name || "", url: buildKnowledgeUrl(rel.label?.name || "") };
-  }
-  if (rel["target-type"] === "work") {
-    return { label: rel.work?.title || "", url: buildKnowledgeUrl(rel.work?.title || "") };
-  }
-  if (rel["target-type"] === "recording") {
+function buildGenreEraItems(tagNames) {
+  return (tagNames || []).map((tag) => {
+    const meta = inferGenreEra(tag);
     return {
-      label: rel.recording?.title || "",
-      url: buildKnowledgeUrl(rel.recording?.title || ""),
+      label: `${tag} · ${meta.era} · ${meta.note}`,
+      url: buildKnowledgeUrl(tag),
     };
+  });
+}
+
+function inferGenreEra(tagName) {
+  const key = normalizeText(tagName);
+  const table = {
+    pop: { era: "1960s-present", note: "글로벌 주류에서 꾸준히 확장된 사운드" },
+    rock: { era: "1970s-1990s peak", note: "밴드 중심의 강한 기타/리듬 문법" },
+    hiphop: { era: "1990s-present", note: "비트와 랩 서사를 중심으로 진화" },
+    "hip hop": { era: "1990s-present", note: "비트와 랩 서사를 중심으로 진화" },
+    rnb: { era: "1990s-2000s peak", note: "소울 기반의 보컬 중심 대중 장르" },
+    soul: { era: "1960s-1980s peak", note: "감정 밀도가 높은 보컬 전통" },
+    funk: { era: "1970s-1980s peak", note: "그루브 중심의 리듬 미학" },
+    disco: { era: "late 1970s-early 1980s", note: "댄스플로어 중심의 대중음악 흐름" },
+    synthpop: { era: "1980s peak", note: "신시사이저 기반의 멜로디 문법" },
+    electronic: { era: "1990s-present", note: "클럽/실험 양쪽으로 확장" },
+    house: { era: "late 1980s-2000s", note: "4/4 비트 기반 클럽 신의 핵심" },
+    techno: { era: "1990s-2000s", note: "반복 리듬과 질감 중심 전자음악" },
+    indie: { era: "2000s-2010s peak", note: "독립 레이블/대안 감수성 중심" },
+    kpop: { era: "2010s-present", note: "퍼포먼스와 제작 시스템이 결합된 글로벌 장르" },
+    jazz: { era: "1940s-1960s peak", note: "즉흥성과 하모니의 전통적 축" },
+    classical: { era: "historical-continuous", note: "시대별 작법이 축적된 기반 장르" },
+  };
+  if (table[key]) {
+    return table[key];
   }
-  if (rel["target-type"] === "url") {
-    return { label: rel.url?.resource || "", url: rel.url?.resource || "" };
-  }
-  return { label: "", url: "" };
-}
-
-function isMusicCreatorRole(roleLower) {
-  return [
-    "composer",
-    "writer",
-    "lyricist",
-    "arranger",
-    "instrument arranger",
-    "orchestrator",
-    "librettist",
-    "conductor",
-  ].some((token) => roleLower.includes(token));
-}
-
-function isMusicProductionRole(roleLower) {
-  return [
-    "producer",
-    "publisher",
-    "label",
-    "imprint",
-    "distributed",
-    "distribution",
-    "management",
-  ].some((token) => roleLower.includes(token));
-}
-
-function isMusicCrewRole(roleLower) {
-  return [
-    "mix",
-    "master",
-    "engineer",
-    "sound",
-    "art direction",
-    "design",
-    "photography",
-    "video",
-    "visual",
-    "cover art",
-  ].some((token) => roleLower.includes(token));
+  return { era: "varies by region/era", note: "지역 신(scene)과 시기에 따라 의미가 변동" };
 }
 
 function buildKnowledgeUrl(name) {
@@ -1057,8 +990,8 @@ async function buildArtistSignatureProfile({
   try {
     const prompt = [
       "당신은 음악연구 조교수다.",
-      "아래 아티스트에 대해 학술형 한국어 요약을 작성하라.",
-      "각 항목은 정확히 4문장으로 구성하라.",
+      "아래 아티스트에 대해 학술 톤 50%, 쉬운 톤 50%의 한국어 요약을 작성하라.",
+      "기존보다 짧게, 각 항목은 정확히 3문장으로 구성하라.",
       "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
       "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
       `아티스트: ${artistName}`,
@@ -1090,13 +1023,13 @@ async function buildArtistSignatureProfile({
     }
 
     return {
-      style: ensureSentenceCount(parsed.style, 4) || fallback.style,
-      themes: ensureSentenceCount(parsed.themes, 4) || fallback.themes,
-      form: ensureSentenceCount(parsed.form, 4) || fallback.form,
+      style: ensureSentenceCount(parsed.style, 3) || fallback.style,
+      themes: ensureSentenceCount(parsed.themes, 3) || fallback.themes,
+      form: ensureSentenceCount(parsed.form, 3) || fallback.form,
       criticalReception:
-        ensureSentenceCount(parsed.criticalReception, 4) || fallback.criticalReception,
-      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 4) || fallback.landmarkWorks,
-      studyGuide: ensureSentenceCount(parsed.studyGuide, 4) || fallback.studyGuide,
+        ensureSentenceCount(parsed.criticalReception, 3) || fallback.criticalReception,
+      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 3) || fallback.landmarkWorks,
+      studyGuide: ensureSentenceCount(parsed.studyGuide, 3) || fallback.studyGuide,
     };
   } catch (_error) {
     return fallback;
@@ -1110,12 +1043,12 @@ function buildFallbackArtistProfile({ artistName, referenceWork, artistSummary }
     firstSentence(artistSummary) || `${artist}는 장르 실험과 시대 감수성의 결합으로 평가된다.`;
 
   return {
-    style: `${summaryHead} 사운드 디자인의 핵심은 장르 규범을 인용하되 반복적으로 변형하는 전략에 있다. 음색과 리듬의 대비를 통해 청취 경험의 긴장을 조직한다. 이러한 스타일은 대중성과 실험성의 경계를 가로지르는 중층적 미학으로 읽힌다.`,
-    themes: `${artist}의 핵심 주제는 정체성, 기술환경, 감정의 거리감처럼 현대적 불안의 정동을 다룬다. 가사는 개인 서사와 사회적 맥락을 교차시키며 다층적 의미를 생산한다. 주제의 반복은 작품 간 통일성을 만들되 시대별 해석의 폭을 열어둔다. 결과적으로 청자는 동일한 키워드를 다른 사운드 문법으로 재경험하게 된다.`,
-    form: `${artist}의 형식적 특성은 곡 단위 완결보다 앨범 단위 구조화를 중시하는 데 있다. 편곡은 정적 구간과 밀도 높은 구간을 교차시키며 서사적 호흡을 만든다. 프로덕션의 질감 선택은 주제의 추상도를 조절하는 핵심 장치로 기능한다. 따라서 형식은 내용의 전달을 넘어 해석의 방향 자체를 조직한다.`,
-    criticalReception: `${artist}에 대한 평단 평가는 대체로 장르 재구성과 사운드 혁신의 지속성을 높이 평가한다. 반면 일부 비평은 난해성이나 접근성의 문제를 한계로 지적한다. 그럼에도 다수의 논의는 동시대 음악문법의 변화를 추동한 영향력을 핵심 근거로 제시한다. 최근 평가에서는 스트리밍 환경에서 작품 단위 감상의 가치가 어떻게 재정의되는지도 중요한 쟁점이다.`,
-    landmarkWorks: `${artist}의 대표작은 시기별 미학적 전환점을 선명하게 보여주는 레퍼런스로 기능한다. ${work}는 그 전환을 집약적으로 확인할 수 있는 사례로 반복 인용된다. 초기작과 중기작, 후기작을 비교하면 동일한 문제의식이 다른 프로덕션 문법으로 변주되는 양상이 드러난다. 따라서 대표작 읽기는 개별 히트곡보다 앨범 연속체를 기준으로 수행하는 편이 타당하다.`,
-    studyGuide: `첫 단계에서는 ${work}를 중심으로 트랙 배열과 사운드 층위를 분석해 기본 문법을 파악한다. 두 번째 단계에서는 전후기 앨범을 비교해 형식 변화와 주제의 지속성을 기록한다. 세 번째 단계에서는 동시대 아티스트와의 상호영향 관계를 도식화해 위치를 검증한다. 마지막으로 평론문과 인터뷰를 교차독해해 청취 경험과 비평 언어의 간극을 점검한다.`,
+    style: `${summaryHead} 핵심은 익숙한 장르 문법을 가져와 새로운 질감으로 다시 조합하는 데 있다. 어렵게 들릴 수 있지만, 실제 청취 포인트는 보컬 톤과 리듬 대비를 먼저 잡으면 이해가 빠르다.`,
+    themes: `${artist}의 주제는 정체성, 관계, 시대 감정처럼 개인과 사회가 만나는 지점에 집중된다. 가사와 사운드가 같은 메시지를 다른 방식으로 반복해 듣는 사람이 맥락을 쉽게 따라가게 만든다. 그래서 작품을 들을 때 키워드가 트랙마다 어떻게 변주되는지 확인하면 좋다.`,
+    form: `${artist}는 한 곡의 완결성보다 앨범 전체 흐름을 설계하는 방식을 자주 택한다. 곡 배치와 사운드 밀도 변화가 이야기의 긴장과 완급을 만든다. 즉 형식은 장식이 아니라 감정 전달 구조로 기능한다.`,
+    criticalReception: `${artist}에 대한 평가는 대체로 장르 확장과 사운드 실험의 지속성에 높은 점수를 준다. 동시에 일부 평론은 난해함이나 대중 접근성의 한계를 지적한다. 종합하면, 영향력은 크지만 해석 난이도는 청자에 따라 갈린다는 평가가 많다.`,
+    landmarkWorks: `${artist}의 대표작은 시기별 미학 변화를 가장 선명하게 보여주는 기준점이다. ${work}는 그 전환을 확인하기 좋은 입문용 사례로 자주 언급된다. 초기-중기-후기를 비교하면 같은 문제의식이 어떤 사운드로 달라지는지 빠르게 파악할 수 있다.`,
+    studyGuide: `먼저 ${work}를 중심으로 트랙 순서와 사운드 층을 메모하며 들어보면 기본 문법을 잡기 쉽다. 다음으로 전후기 작품을 비교해 무엇이 유지되고 무엇이 바뀌는지 확인한다. 마지막으로 인터뷰나 평론을 함께 보면 청취 경험과 비평 언어를 연결하기 쉬워진다.`,
   };
 }
 
@@ -1139,8 +1072,8 @@ async function buildDirectorSignatureProfile({
   try {
     const prompt = [
       "당신은 영화연구 조교수다.",
-      "아래 감독에 대해 학술형 한국어 요약을 작성하라.",
-      "각 항목은 정확히 4문장으로 구성하라.",
+      "아래 감독에 대해 학술 톤 50%, 쉬운 톤 50%의 한국어 요약을 작성하라.",
+      "기존보다 짧게, 각 항목은 정확히 3문장으로 구성하라.",
       "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
       "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
       `감독: ${directorName}`,
@@ -1173,13 +1106,13 @@ async function buildDirectorSignatureProfile({
     }
 
     return {
-      style: ensureSentenceCount(parsed.style, 4) || fallback.style,
-      themes: ensureSentenceCount(parsed.themes, 4) || fallback.themes,
-      form: ensureSentenceCount(parsed.form, 4) || fallback.form,
+      style: ensureSentenceCount(parsed.style, 3) || fallback.style,
+      themes: ensureSentenceCount(parsed.themes, 3) || fallback.themes,
+      form: ensureSentenceCount(parsed.form, 3) || fallback.form,
       criticalReception:
-        ensureSentenceCount(parsed.criticalReception, 4) || fallback.criticalReception,
-      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 4) || fallback.landmarkWorks,
-      studyGuide: ensureSentenceCount(parsed.studyGuide, 4) || fallback.studyGuide,
+        ensureSentenceCount(parsed.criticalReception, 3) || fallback.criticalReception,
+      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 3) || fallback.landmarkWorks,
+      studyGuide: ensureSentenceCount(parsed.studyGuide, 3) || fallback.studyGuide,
     };
   } catch (_error) {
     return fallback;
@@ -1198,12 +1131,12 @@ function buildFallbackDirectorProfile({
   const movieHead = firstSentence(movieSummary) || `${film}는 사회적 맥락과 서사적 장치를 함께 제시한다.`;
 
   return {
-    style: `${directorHead} 연출의 핵심은 장면의 리듬을 통제하면서 감정 곡선을 단계적으로 설계하는 방식이다. 카메라의 이동과 인물 배치를 통해 서사의 권력관계를 시각적으로 구조화한다. 이러한 스타일은 상업성과 작가성을 동시에 확보하려는 전략으로 읽힌다.`,
-    themes: `${movieHead} 반복되는 주제는 계급, 욕망, 도덕적 균열처럼 사회구조와 개인심리의 접점에 놓인다. 인물들은 제도적 압력 속에서 선택을 강요받으며 그 과정이 드라마의 긴장을 만든다. 이 주제 구성은 지역적 맥락을 넘어서 동시대 관객의 보편적 불안을 자극한다.`,
-    form: `${director}의 형식적 특징은 미장센의 층위를 통해 의미를 누적시키는 데 있다. 컷 전환은 설명보다 함축을 우선하며 관객의 해석 참여를 유도한다. 사운드와 침묵의 대비를 사용해 서사의 전환점을 강조한다. 결과적으로 형식은 내용의 보조가 아니라 비평적 논점을 생성하는 장치로 작동한다.`,
-    criticalReception: `${director}에 대한 평단 평가는 대체로 높은 완성도와 장르 혁신을 긍정한다. 동시에 일부 평론은 상징의 과잉이나 주제의 직접성을 한계로 지적한다. 그럼에도 핵심 합의는 대중성과 비평성을 동시 달성했다는 데 있다. 최근 논의에서는 글로벌 수용 맥락에서 이 연출이 어떻게 번역되는지도 중요한 평가 축이 된다.`,
-    landmarkWorks: `${director}의 대표작은 시대별 문제의식을 서로 다른 장르 실험으로 제시한다. ${film}는 그중에서도 서사구조와 사회비판의 결합이 선명한 사례로 자주 인용된다. 다른 주요 작품들과 비교하면 동일한 주제가 변주되는 방식이 관찰된다. 따라서 대표작 읽기는 개별 영화 감상보다 작가적 연속성을 추적하는 방식이 효과적이다.`,
-    studyGuide: `첫 단계에서는 ${film}를 중심으로 인물관계와 공간구조를 도식화해 기본 문법을 파악한다. 두 번째 단계에서는 같은 감독의 전후기 작품을 비교해 주제와 형식의 변화축을 기록한다. 세 번째 단계에서는 동시대 감독과의 비교를 통해 차별적 미학을 검증한다. 마지막으로 평론문과 인터뷰를 교차독해해 해석의 편향을 점검한다.`,
+    style: `${directorHead} 연출의 핵심은 장면 리듬과 인물 배치를 통해 감정선을 단계적으로 쌓는 방식이다. 전문적으로 보면 미장센의 통제력이 강하고, 관객 입장에서는 장면 전환이 명확해 몰입이 쉽다.`,
+    themes: `${movieHead} 반복되는 주제는 권력, 욕망, 불안처럼 사회와 개인이 충돌하는 지점에 모인다. 인물의 선택이 서사 긴장을 만들기 때문에 사건보다 관계 변화를 따라가며 보면 이해가 빨라진다. 이 점이 국내외 관객에게 폭넓게 통하는 이유로 자주 언급된다.`,
+    form: `${director}는 설명을 줄이고 이미지와 소리로 의미를 쌓는 형식을 선호한다. 컷 전환과 침묵의 사용이 서사의 전환점을 자연스럽게 강조한다. 결과적으로 형식은 줄거리 전달을 넘어서 해석 방향을 안내하는 장치가 된다.`,
+    criticalReception: `${director}에 대한 평가는 완성도와 장르 운용 능력에 높은 점수를 주는 편이다. 다만 일부 평론은 상징의 직접성이나 과잉 해석 가능성을 한계로 지적한다. 전반적으로는 대중성과 비평성을 동시에 확보했다는 합의가 강하다.`,
+    landmarkWorks: `${director}의 대표작은 시기별 문제의식과 연출 전략의 변화를 보여주는 기준점이다. ${film}는 그중에서도 서사 구조와 사회적 해석이 잘 맞물린 사례로 자주 인용된다. 다른 작품과 함께 보면 같은 주제가 어떻게 변주되는지 선명해진다.`,
+    studyGuide: `먼저 ${film}를 보며 인물 관계와 공간 이동을 간단히 도식화해 기본 구조를 잡는다. 다음으로 전후기 작품을 비교해 주제와 형식의 유지/변화를 체크한다. 마지막으로 평론과 인터뷰를 함께 읽으면 해석의 폭을 안정적으로 넓힐 수 있다.`,
   };
 }
 
@@ -1300,34 +1233,40 @@ async function fetchAwardArticles({ movieTitle, directorName, awards }) {
 }
 
 async function fetchAwardArticlesForMusic({ artistName, awards }) {
-  const queryTerms = [artistName, ...awards.slice(0, 2)].filter(Boolean).join(" ");
-  if (!queryTerms) {
+  if (!artistName) {
     return [];
   }
-
-  const rssUrl =
-    "https://news.google.com/rss/search?" +
-    new URLSearchParams({
-      q: `${queryTerms} music award`,
-      hl: "ko",
-      gl: "KR",
-      ceid: "KR:ko",
-    });
-
-  try {
-    const response = await fetch(rssUrl);
-    if (!response.ok) {
-      return [];
-    }
-    const xml = await response.text();
-    const items = rankAndFilterNewsItems(parseGoogleNewsRss(xml)).slice(0, 3);
-    return items.map((item) => ({
-      label: `Article: ${item.title}`,
-      url: item.link,
-    }));
-  } catch (_error) {
-    return [];
-  }
+  const keywords = awards?.length
+    ? [...awards.slice(0, 2), "music award", "수상"]
+    : ["Grammy", "Billboard Music Awards", "Brit Awards", "MAMA", "수상"];
+  const queries = keywords.map((keyword) => `${artistName} ${keyword}`);
+  const buckets = await Promise.all(
+    queries.map(async (query) => {
+      const rssUrl =
+        "https://news.google.com/rss/search?" +
+        new URLSearchParams({
+          q: query,
+          hl: "ko",
+          gl: "KR",
+          ceid: "KR:ko",
+        });
+      try {
+        const response = await fetch(rssUrl);
+        if (!response.ok) {
+          return [];
+        }
+        const xml = await response.text();
+        return parseGoogleNewsRss(xml);
+      } catch {
+        return [];
+      }
+    })
+  );
+  const ranked = rankAndFilterNewsItems(buckets.flat()).slice(0, 3);
+  return ranked.map((item) => ({
+    label: `Article: ${item.title}`,
+    url: item.link,
+  }));
 }
 
 function parseGoogleNewsRss(xml) {

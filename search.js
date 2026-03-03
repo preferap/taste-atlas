@@ -4,11 +4,14 @@ const LAST_RESULTS_KEY = "taste-atlas-last-results-v1";
 const formEl = document.getElementById("taste-form");
 const inputEl = document.getElementById("title");
 const sourceStatusEl = document.getElementById("source-status");
+const searchShellEl = document.getElementById("search-shell");
 const typeMovieEl = document.getElementById("type-movie");
 const typeMusicEl = document.getElementById("type-music");
 const searchResultsEl = document.getElementById("search-results");
 const contentResultListEl = document.getElementById("content-result-list");
 const personResultListEl = document.getElementById("person-result-list");
+const contentResultHeadingEl = document.getElementById("content-result-heading");
+const personResultHeadingEl = document.getElementById("person-result-heading");
 
 const detailEmptyEl = document.getElementById("detail-empty");
 const detailCardEl = document.getElementById("detail-card");
@@ -25,6 +28,7 @@ function setActiveType(type) {
   activeType = type;
   typeMovieEl.classList.toggle("active", type === "movie");
   typeMusicEl.classList.toggle("active", type === "music");
+  updateResultHeadings();
 }
 
 typeMovieEl.addEventListener("click", () => setActiveType("movie"));
@@ -57,6 +61,7 @@ formEl.addEventListener("submit", async (event) => {
 
     window.localStorage.setItem(LAST_RESULTS_KEY, JSON.stringify(grouped));
     renderCandidates(grouped);
+    setShellState(true);
     sourceStatusEl.textContent = `Found ${candidates.length} result(s).`;
   } catch (_error) {
     sourceStatusEl.textContent = "Search failed. Check API/network.";
@@ -89,6 +94,7 @@ function clearCandidates() {
   searchResultsEl.classList.add("hidden");
   contentResultListEl.innerHTML = "";
   personResultListEl.innerHTML = "";
+  setShellState(false);
 }
 
 function renderCandidateList(container, items) {
@@ -275,6 +281,27 @@ function renderDetail(node) {
   });
 }
 
+function updateResultHeadings() {
+  if (!contentResultHeadingEl || !personResultHeadingEl) {
+    return;
+  }
+  if (activeType === "music") {
+    contentResultHeadingEl.textContent = "Albums";
+    personResultHeadingEl.textContent = "Artists";
+    return;
+  }
+  contentResultHeadingEl.textContent = "Films";
+  personResultHeadingEl.textContent = "People";
+}
+
+function setShellState(active) {
+  if (!searchShellEl) {
+    return;
+  }
+  searchShellEl.classList.toggle("active", active);
+  searchShellEl.classList.toggle("idle", !active);
+}
+
 function loadGraph() {
   const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
   if (!raw) {
@@ -312,3 +339,4 @@ async function checkSourceHealth() {
 }
 
 checkSourceHealth();
+updateResultHeadings();
