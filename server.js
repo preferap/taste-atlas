@@ -513,23 +513,23 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       links: ["Source: local fallback"],
       connectedSections: [
         {
-          title: "1) Artists",
+          title: "Artists",
           items: [{ label: `Query: ${q}`, url: "" }],
         },
         {
-          title: "2) Artist Signatures",
+          title: "Artist Signatures",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "3) Album",
+          title: "Album",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "4) Discography Highlights",
+          title: "Discography Highlights",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "5) Genres + Era",
+          title: "Genres + Era",
           items: [{ label: "n/a", url: "" }],
         },
       ],
@@ -550,7 +550,8 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   }
 
   const detail = await fetchMusicBrainzArtist(artistId);
-  const wikiSummary = await fetchWikipediaSummary(detail.name);
+  const wikiSummaryRaw = await fetchWikipediaSummary(detail.name, { languages: ["ko", "en"] });
+  const wikiSummary = await summarizeToKorean(wikiSummaryRaw, `음악 아티스트 ${detail.name} 설명`);
   const wikidataDesc = await fetchWikidataDescription(detail?.relations);
   const tagNames = (detail?.tags || []).slice(0, 10).map((tag) => tag.name);
   const topReleases = await fetchMusicBrainzReleaseGroupsByArtist(artistId);
@@ -571,11 +572,14 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     releaseArtistName,
     topReleases,
     sourceKind,
+    genres: selectedRelease?.tags?.map((tag) => tag.name).filter(Boolean) || [],
+    primaryType: selectedRelease?.["primary-type"] || "",
+    secondaryTypes: selectedRelease?.["secondary-types"] || [],
   });
-  const genreItems = buildGenreEraItems(tagNames);
+  const genreItems = buildGenreEraItems(tagNames, artistName);
   const releaseItems = topReleases.slice(0, 8).map((release) => ({
     label: `${release.title} (${release["first-release-date"] || "n/a"})`,
-    url: buildKnowledgeUrl(release.title),
+    url: buildSpotifySearchUrl(`${artistName} ${release.title}`),
   }));
   const artistSignatureProfile = await buildArtistSignatureProfile({
     artistName,
@@ -598,15 +602,15 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     type: "music",
     desc:
       (selectedRelease
-        ? `${releaseNodeTitle || artistName} by ${releaseArtistName}. ${
+        ? `${releaseNodeTitle || artistName}은(는) ${releaseArtistName}의 작품이다. ${
             selectedRelease["first-release-date"]
-              ? `Released on ${selectedRelease["first-release-date"]}.`
+              ? `${selectedRelease["first-release-date"]}에 최초 발매되었다.`
               : ""
           }`
         : "") ||
       wikiSummary ||
       wikidataDesc ||
-      `${artistName} is linked with ${tagNames.slice(0, 3).join(", ") || "multiple genres"}.`,
+      `${artistName}은(는) ${tagNames.slice(0, 3).join(", ") || "다양한 장르"}와 연결된다.`,
     path: [
       `${artistName} 대표작 확인`,
       `장르 ${tagNames.slice(0, 2).join(" / ") || "분석"} 공부`,
@@ -618,11 +622,11 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
       "Source: MusicBrainz",
     ],
     connectedSections: [
-      { title: "1) Artists", items: artistItems.slice(0, 12) },
-      { title: "2) Artist Signatures", items: signatureItems },
-      { title: "3) Album", items: albumItems.slice(0, 8) },
-      { title: "4) Discography Highlights", items: releaseItems },
-      { title: "5) Genres + Era", items: genreItems.slice(0, 12) },
+      { title: "Artists", items: artistItems.slice(0, 12) },
+      { title: "Artist Signatures", items: signatureItems },
+      { title: "Album", items: albumItems.slice(0, 10) },
+      { title: "Discography Highlights", items: releaseItems },
+      { title: "Genres + Era", items: genreItems.slice(0, 12) },
     ],
     posterUrl,
   };
@@ -870,7 +874,7 @@ function buildMusicArtistItems({ artistName, relations, country, disambiguation 
   return [
     { label: `Primary Artist: ${artistName}`, url: buildKnowledgeUrl(artistName) },
     { label: `Country: ${country || "n/a"}`, url: "" },
-    { label: `Disambiguation: ${disambiguation || "n/a"}`, url: "" },
+    ...(disambiguation ? [{ label: `Disambiguation: ${disambiguation}`, url: "" }] : []),
     ...members.slice(0, 10),
   ];
 }
@@ -881,12 +885,15 @@ function buildMusicAlbumItems({
   releaseArtistName,
   topReleases,
   sourceKind,
+  genres,
+  primaryType,
+  secondaryTypes,
 }) {
   if (selectedRelease) {
     return [
       {
         label: `Album: ${releaseNodeTitle || "n/a"}`,
-        url: releaseNodeTitle ? buildKnowledgeUrl(releaseNodeTitle) : "",
+        url: releaseNodeTitle ? buildSpotifySearchUrl(`${releaseArtistName} ${releaseNodeTitle}`) : "",
       },
       {
         label: `Artist: ${releaseArtistName || "n/a"}`,
@@ -896,57 +903,108 @@ function buildMusicAlbumItems({
         label: `First Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
         url: "",
       },
+      {
+        label: `Album Type: ${primaryType || "n/a"}${
+          Array.isArray(secondaryTypes) && secondaryTypes.length
+            ? ` / ${secondaryTypes.slice(0, 2).join(", ")}`
+            : ""
+        }`,
+        url: "",
+      },
+      {
+        label: `Genre Tags: ${
+          Array.isArray(genres) && genres.length ? genres.slice(0, 3).join(", ") : "n/a"
+        }`,
+        url: "",
+      },
       { label: `Source kind: ${sourceKind || "release"}`, url: "" },
+      { label: "Data Source: MusicBrainz release-group + Cover Art Archive", url: "" },
     ];
   }
   const lead = topReleases[0];
   return [
     {
       label: `Album: ${lead?.title || "n/a"}`,
-      url: lead?.title ? buildKnowledgeUrl(lead.title) : "",
+      url: lead?.title ? buildSpotifySearchUrl(lead.title) : "",
     },
     {
       label: `First Release Date: ${lead?.["first-release-date"] || "n/a"}`,
       url: "",
     },
     { label: `Source kind: ${sourceKind || "artist"}`, url: "" },
+    { label: "Data Source: MusicBrainz release-group", url: "" },
   ];
 }
 
-function buildGenreEraItems(tagNames) {
+function buildGenreEraItems(tagNames, artistName) {
   return (tagNames || []).map((tag) => {
-    const meta = inferGenreEra(tag);
+    const meta = inferGenreEra(tag, artistName);
     return {
-      label: `${tag} · ${meta.era} · ${meta.note}`,
+      label: `${tag} (${meta.era})\n${meta.analysis}`,
       url: buildKnowledgeUrl(tag),
     };
   });
 }
 
-function inferGenreEra(tagName) {
+function inferGenreEra(tagName, artistName) {
   const key = normalizeText(tagName);
   const table = {
-    pop: { era: "1960s-present", note: "글로벌 주류에서 꾸준히 확장된 사운드" },
-    rock: { era: "1970s-1990s peak", note: "밴드 중심의 강한 기타/리듬 문법" },
-    hiphop: { era: "1990s-present", note: "비트와 랩 서사를 중심으로 진화" },
-    "hip hop": { era: "1990s-present", note: "비트와 랩 서사를 중심으로 진화" },
-    rnb: { era: "1990s-2000s peak", note: "소울 기반의 보컬 중심 대중 장르" },
-    soul: { era: "1960s-1980s peak", note: "감정 밀도가 높은 보컬 전통" },
-    funk: { era: "1970s-1980s peak", note: "그루브 중심의 리듬 미학" },
-    disco: { era: "late 1970s-early 1980s", note: "댄스플로어 중심의 대중음악 흐름" },
-    synthpop: { era: "1980s peak", note: "신시사이저 기반의 멜로디 문법" },
-    electronic: { era: "1990s-present", note: "클럽/실험 양쪽으로 확장" },
-    house: { era: "late 1980s-2000s", note: "4/4 비트 기반 클럽 신의 핵심" },
-    techno: { era: "1990s-2000s", note: "반복 리듬과 질감 중심 전자음악" },
-    indie: { era: "2000s-2010s peak", note: "독립 레이블/대안 감수성 중심" },
-    kpop: { era: "2010s-present", note: "퍼포먼스와 제작 시스템이 결합된 글로벌 장르" },
-    jazz: { era: "1940s-1960s peak", note: "즉흥성과 하모니의 전통적 축" },
-    classical: { era: "historical-continuous", note: "시대별 작법이 축적된 기반 장르" },
+    pop: {
+      era: "1960s-present",
+      analysis:
+        `${artistName || "이 아티스트"}의 팝 문법은 멜로디 중심 구조를 유지하면서도 프로덕션 질감을 시대별로 갱신한다. 대중 친화적 후렴과 스타일 전환을 병치하는 방식이 핵심 특징이다.`,
+    },
+    rock: {
+      era: "1970s-1990s peak",
+      analysis:
+        "록 기반 사운드는 기타/드럼의 에너지와 라이브 감각을 중심으로 정체성을 강화한다. 최근에는 전자 프로덕션과 결합해 하이브리드 록으로 확장되는 흐름이 강하다.",
+    },
+    hiphop: {
+      era: "1990s-present",
+      analysis:
+        "힙합 계열은 리듬과 발화의 밀도를 통해 서사적 캐릭터를 구축한다. 비트 선택과 보컬 톤의 대비가 시대성을 드러내는 핵심 축으로 작동한다.",
+    },
+    "hip hop": {
+      era: "1990s-present",
+      analysis:
+        "힙합 계열은 리듬과 발화의 밀도를 통해 서사적 캐릭터를 구축한다. 비트 선택과 보컬 톤의 대비가 시대성을 드러내는 핵심 축으로 작동한다.",
+    },
+    rnb: {
+      era: "1990s-2000s peak",
+      analysis:
+        "R&B는 보컬 디테일과 그루브 중심 편곡을 통해 감정선의 미세한 변화를 전달한다. 현대 R&B에서는 전자음향과 미니멀 리듬을 결합한 질감이 특징적으로 나타난다.",
+    },
+    electronic: {
+      era: "1990s-present",
+      analysis:
+        "전자음악 기반 장르는 사운드 디자인 자체를 서사의 중심에 두는 경향이 강하다. 클럽 미학과 실험성이 교차하며 트랙의 질감 변화가 핵심 청취 포인트가 된다.",
+    },
+    kpop: {
+      era: "2010s-present",
+      analysis:
+        "K-pop 문법은 퍼포먼스 구조와 멀티장르 편곡을 결합해 곡 단위 임팩트를 극대화한다. 글로벌 유통 환경에 맞춘 훅 중심 구성과 시각적 콘셉트 연동이 중요한 특징이다.",
+    },
+    jazz: {
+      era: "1940s-1960s peak",
+      analysis:
+        "재즈 계열은 화성과 리듬의 변주를 통해 즉흥적 긴장감을 조직한다. 현대 맥락에서는 팝/힙합과의 융합을 통해 청취 진입 장벽을 낮추는 경향이 나타난다.",
+    },
   };
   if (table[key]) {
     return table[key];
   }
-  return { era: "varies by region/era", note: "지역 신(scene)과 시기에 따라 의미가 변동" };
+  return {
+    era: "varies by region/era",
+    analysis:
+      `${artistName || "이 아티스트"}의 장르 표기는 지역 신(scene)과 시기에 따라 해석 폭이 달라진다. 대표작의 편곡/보컬/리듬 선택을 함께 보면 장르 맥락을 더 정확히 파악할 수 있다.`,
+  };
+}
+
+function buildSpotifySearchUrl(query) {
+  if (!query) {
+    return "";
+  }
+  return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
 }
 
 function buildKnowledgeUrl(name) {
@@ -1340,17 +1398,66 @@ function decodeXmlText(value) {
     .replaceAll("&#39;", "'");
 }
 
-async function fetchWikipediaSummary(title) {
+async function fetchWikipediaSummary(title, options = {}) {
   if (!title) {
     return null;
   }
-  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    return null;
+  const languages =
+    Array.isArray(options.languages) && options.languages.length ? options.languages : ["en"];
+  for (const language of languages) {
+    const url = `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+      title
+    )}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      continue;
+    }
+    const data = await response.json();
+    if (data.extract) {
+      return data.extract;
+    }
   }
-  const data = await response.json();
-  return data.extract || null;
+  return null;
+}
+
+async function summarizeToKorean(text, topicLabel = "") {
+  const source = String(text || "").trim();
+  if (!source) {
+    return "";
+  }
+  if (/[가-힣]/.test(source)) {
+    return source;
+  }
+  if (!process.env.OPENAI_API_KEY) {
+    return source;
+  }
+  try {
+    const prompt = [
+      "다음 텍스트를 한국어로 자연스럽게 번역/요약하라.",
+      "2~3문장으로 간결하게 작성하라.",
+      `주제: ${topicLabel || "n/a"}`,
+      `원문: ${source}`,
+    ].join("\n");
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        input: prompt,
+      }),
+    });
+    if (!response.ok) {
+      return source;
+    }
+    const data = await response.json();
+    const out = extractResponseText(data).trim();
+    return out || source;
+  } catch {
+    return source;
+  }
 }
 
 async function fetchMovieWikidataMeta(title) {

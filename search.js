@@ -329,11 +329,11 @@ function normalizeText(value) {
 
 function sanitizeMusicSections(sections) {
   const expectedTitles = [
-    "1) Artists",
-    "2) Artist Signatures",
-    "3) Album",
-    "4) Discography Highlights",
-    "5) Genres + Era",
+    "Artists",
+    "Artist Signatures",
+    "Album",
+    "Discography Highlights",
+    "Genres + Era",
   ];
   const byTitle = new Map(
     (Array.isArray(sections) ? sections : []).map((section) => [String(section.title || ""), section])
@@ -378,23 +378,23 @@ function sanitizeMusicSections(sections) {
 
   return [
     {
-      title: "1) Artists",
+      title: "Artists",
       items: [{ label: `Primary Artist: ${artistName}`, url: "" }],
     },
     {
-      title: "2) Artist Signatures",
+      title: "Artist Signatures",
       items: sanitizeMusicItems(signatureItems).slice(0, 6),
     },
     {
-      title: "3) Album",
+      title: "Album",
       items: sanitizeMusicItems(albumItems).slice(0, 6),
     },
     {
-      title: "4) Discography Highlights",
+      title: "Discography Highlights",
       items: sanitizeMusicItems(discographyItems).slice(0, 10),
     },
     {
-      title: "5) Genres + Era",
+      title: "Genres + Era",
       items: sanitizeMusicItems(genreItems).slice(0, 10),
     },
   ].map((section) => ({

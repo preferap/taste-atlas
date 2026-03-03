@@ -527,10 +527,10 @@ ul {
 
 .floating-head h2 {
   margin: 0;
-  font-size: 48px;
+  font-size: 14px;
   line-height: 0.95;
   font-style: italic;
-  font-weight: 400;
+  font-weight: 300;
 }
 
 .floating-head .top-nav {
@@ -608,7 +608,7 @@ ul {
 .search-row input {
   border: 0;
   background: transparent;
-  font-size: clamp(24px, 2.4vw, 34px);
+  font-size: clamp(17px, 1.7vw, 24px);
   padding: 12px 4px 10px 0;
 }
 
@@ -620,7 +620,7 @@ ul {
   border: 0;
   background: transparent;
   padding: 8px 0 8px 8px;
-  font-size: 34px;
+  font-size: 24px;
   line-height: 1;
 }
 
@@ -644,14 +644,14 @@ ul {
 
 .info-stage #detail-card h4 {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.1;
   font-weight: 300;
 }
 
 .info-stage #detail-card h5 {
   margin: 18px 0 10px;
-  font-size: 11px;
+  font-size: 14px;
   font-style: italic;
   font-weight: 300;
 }
@@ -660,7 +660,7 @@ ul {
 .info-stage #detail-desc,
 .info-stage li,
 .info-stage p {
-  font-size: clamp(9px, 0.72vw, 11px);
+  font-size: clamp(12px, 0.95vw, 14px);
   line-height: 1.45;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
@@ -670,6 +670,11 @@ ul {
 .info-stage #detail-card * {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
+}
+
+.connected-group li,
+.connected-group a {
+  white-space: pre-line;
 }
 
 .info-stage .archive-poster {
