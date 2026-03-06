@@ -521,19 +521,15 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
           items: [{ label: `Query: ${q}`, url: "" }],
         },
         {
-          title: "Artist Signatures",
+          title: "About",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "Album",
+          title: "Albums",
           items: [{ label: "n/a", url: "" }],
         },
         {
-          title: "Discography Highlights",
-          items: [{ label: "n/a", url: "" }],
-        },
-        {
-          title: "Genres + Era",
+          title: "Genres & Era",
           items: [{ label: "n/a", url: "" }],
         },
       ],
@@ -567,8 +563,6 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
   const artistItems = buildMusicArtistItems({
     artistName,
     relations: detail?.relations,
-    country: detail.country || "",
-    disambiguation: detail.disambiguation || "",
   });
   const albumItems = buildMusicAlbumItems({
     selectedRelease,
@@ -576,27 +570,17 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     releaseArtistName,
     topReleases,
     sourceKind,
-    genres: selectedRelease?.tags?.map((tag) => tag.name).filter(Boolean) || [],
-    primaryType: selectedRelease?.["primary-type"] || "",
-    secondaryTypes: selectedRelease?.["secondary-types"] || [],
   });
-  const genreItems = buildGenreEraItems(tagNames, artistName);
-  const releaseItems = topReleases.slice(0, 8).map((release) => ({
-    label: `${release.title} (${release["first-release-date"] || "n/a"})`,
-    url: buildSpotifySearchUrl(`${artistName} ${release.title}`),
-  }));
-  const artistSignatureProfile = await buildArtistSignatureProfile({
+  const genreItems = await buildGenreEraItems(tagNames, artistName);
+  const aboutProfile = await buildArtistAboutProfile({
     artistName,
     referenceWork: selectedRelease?.title || topReleases[0]?.title || "",
     artistSummary: wikiSummary || wikidataDesc || "",
   });
-  const signatureItems = [
-    { label: `Style: ${artistSignatureProfile.style}`, url: "" },
-    { label: `Themes: ${artistSignatureProfile.themes}`, url: "" },
-    { label: `Form: ${artistSignatureProfile.form}`, url: "" },
-    { label: `Critical Reception: ${artistSignatureProfile.criticalReception}`, url: "" },
-    { label: `Landmark Works: ${artistSignatureProfile.landmarkWorks}`, url: "" },
-    { label: `Study Guide: ${artistSignatureProfile.studyGuide}`, url: "" },
+  const aboutItems = [
+    { label: `개요\n${aboutProfile.overview}`, url: "" },
+    { label: `활동\n${aboutProfile.activity}`, url: "" },
+    { label: `영향\n${aboutProfile.influence}`, url: "" },
   ];
 
   return {
@@ -627,10 +611,9 @@ async function lookupMusic({ q, candidateId, candidateKind }) {
     ],
     connectedSections: [
       { title: "Artists", items: artistItems.slice(0, 12) },
-      { title: "Artist Signatures", items: signatureItems },
-      { title: "Album", items: albumItems.slice(0, 10) },
-      { title: "Discography Highlights", items: releaseItems },
-      { title: "Genres + Era", items: genreItems.slice(0, 12) },
+      { title: "About", items: aboutItems },
+      { title: "Albums", items: albumItems.slice(0, 30) },
+      { title: "Genres & Era", items: genreItems.slice(0, 10) },
     ],
     posterUrl,
   };
@@ -770,7 +753,7 @@ async function fetchMusicBrainzReleaseGroupsByArtist(artistId) {
     new URLSearchParams({
       artist: artistId,
       fmt: "json",
-      limit: "12",
+      limit: "30",
     });
   const response = await fetch(url, {
     headers: { "User-Agent": "taste-atlas/0.1 (preferap)" },
@@ -865,7 +848,7 @@ function uniqByLabel(items) {
   });
 }
 
-function buildMusicArtistItems({ artistName, relations, country, disambiguation }) {
+function buildMusicArtistItems({ artistName, relations }) {
   const members = uniqByLabel(
     (Array.isArray(relations) ? relations : [])
       .filter((rel) => rel?.["target-type"] === "artist")
@@ -875,12 +858,7 @@ function buildMusicArtistItems({ artistName, relations, country, disambiguation 
         url: buildKnowledgeUrl(rel.artist?.name || ""),
       }))
   );
-  return [
-    { label: `Primary Artist: ${artistName}`, url: buildKnowledgeUrl(artistName) },
-    { label: `Country: ${country || "n/a"}`, url: "" },
-    ...(disambiguation ? [{ label: `Disambiguation: ${disambiguation}`, url: "" }] : []),
-    ...members.slice(0, 10),
-  ];
+  return [{ label: artistName, url: buildKnowledgeUrl(artistName) }, ...members.slice(0, 10)];
 }
 
 function buildMusicAlbumItems({
@@ -889,119 +867,80 @@ function buildMusicAlbumItems({
   releaseArtistName,
   topReleases,
   sourceKind,
-  genres,
-  primaryType,
-  secondaryTypes,
 }) {
-  if (selectedRelease) {
-    return [
-      {
-        label: `Album: ${releaseNodeTitle || "n/a"}`,
-        url: releaseNodeTitle ? buildSpotifySearchUrl(`${releaseArtistName} ${releaseNodeTitle}`) : "",
-      },
-      {
-        label: `Artist: ${releaseArtistName || "n/a"}`,
-        url: releaseArtistName ? buildKnowledgeUrl(releaseArtistName) : "",
-      },
-      {
-        label: `First Release Date: ${selectedRelease["first-release-date"] || "n/a"}`,
-        url: "",
-      },
-      {
-        label: `Album Type: ${primaryType || "n/a"}${
-          Array.isArray(secondaryTypes) && secondaryTypes.length
-            ? ` / ${secondaryTypes.slice(0, 2).join(", ")}`
-            : ""
-        }`,
-        url: "",
-      },
-      {
-        label: `Genre Tags: ${
-          Array.isArray(genres) && genres.length ? genres.slice(0, 3).join(", ") : "n/a"
-        }`,
-        url: "",
-      },
-      { label: `Source kind: ${sourceKind || "release"}`, url: "" },
-      { label: "Data Source: MusicBrainz release-group + Cover Art Archive", url: "" },
-    ];
-  }
-  const lead = topReleases[0];
-  return [
-    {
-      label: `Album: ${lead?.title || "n/a"}`,
-      url: lead?.title ? buildSpotifySearchUrl(lead.title) : "",
-    },
-    {
-      label: `First Release Date: ${lead?.["first-release-date"] || "n/a"}`,
-      url: "",
-    },
-    { label: `Source kind: ${sourceKind || "artist"}`, url: "" },
-    { label: "Data Source: MusicBrainz release-group", url: "" },
-  ];
-}
-
-function buildGenreEraItems(tagNames, artistName) {
-  return (tagNames || []).map((tag) => {
-    const meta = inferGenreEra(tag, artistName);
+  const releaseList = Array.isArray(topReleases) ? topReleases : [];
+  const selectedFirst = selectedRelease
+    ? [
+        {
+          id: selectedRelease.id,
+          title: selectedRelease.title || releaseNodeTitle || "",
+          "first-release-date": selectedRelease["first-release-date"] || "",
+          "artist-credit":
+            selectedRelease["artist-credit"] || [{ name: releaseArtistName || "unknown" }],
+        },
+      ]
+    : [];
+  const mapped = [...selectedFirst, ...releaseList].map((release) => {
+    const title = release.title || "n/a";
+    const artist =
+      release?.["artist-credit"]?.map((credit) => credit.name).filter(Boolean).join(", ") ||
+      releaseArtistName ||
+      "unknown";
+    const dateText = release["first-release-date"] || "n/a";
     return {
-      label: `${tag} (${meta.era})\n${meta.analysis}`,
-      url: buildKnowledgeUrl(tag),
+      label: `${title}\n${dateText} · ${artist}`,
+      url: buildSpotifySearchUrl(`${artist} ${title}`),
+      imageUrl: coverArtUrl(release.id || ""),
     };
   });
+  const deduped = uniqByLabel(mapped);
+  if (!deduped.length) {
+    return [{ label: "앨범 정보를 찾지 못했습니다.", url: "", imageUrl: "" }];
+  }
+  return sourceKind ? deduped : deduped;
 }
 
-function inferGenreEra(tagName, artistName) {
+async function buildGenreEraItems(tagNames, artistName) {
+  const tags = (Array.isArray(tagNames) ? tagNames : []).slice(0, 8);
+  const items = await Promise.all(
+    tags.map(async (tag) => {
+      const meta = inferGenreEra(tag);
+      const wiki = await fetchWikipediaSummary(tag, { languages: ["ko", "en"] });
+      const oneLineSource = firstSentence(wiki) || `${tag} 장르는 지역/시대에 따라 해석이 달라질 수 있다.`;
+      const oneLine = firstSentence(await summarizeToKorean(oneLineSource, `${tag} 장르 설명`));
+      return {
+        label: `${tag} (${meta.era})\n${oneLine}`,
+        url: buildKnowledgeUrl(tag),
+      };
+    })
+  );
+  if (!items.length) {
+    return [
+      {
+        label: `${artistName || "이 아티스트"}의 장르 정보가 부족해 기본 설명만 제공합니다.`,
+        url: "",
+      },
+    ];
+  }
+  return items;
+}
+
+function inferGenreEra(tagName) {
   const key = normalizeText(tagName);
   const table = {
-    pop: {
-      era: "1960s-present",
-      analysis:
-        `${artistName || "이 아티스트"}의 팝 문법은 멜로디 중심 구조를 유지하면서도 프로덕션 질감을 시대별로 갱신한다. 대중 친화적 후렴과 스타일 전환을 병치하는 방식이 핵심 특징이다.`,
-    },
-    rock: {
-      era: "1970s-1990s peak",
-      analysis:
-        "록 기반 사운드는 기타/드럼의 에너지와 라이브 감각을 중심으로 정체성을 강화한다. 최근에는 전자 프로덕션과 결합해 하이브리드 록으로 확장되는 흐름이 강하다.",
-    },
-    hiphop: {
-      era: "1990s-present",
-      analysis:
-        "힙합 계열은 리듬과 발화의 밀도를 통해 서사적 캐릭터를 구축한다. 비트 선택과 보컬 톤의 대비가 시대성을 드러내는 핵심 축으로 작동한다.",
-    },
-    "hip hop": {
-      era: "1990s-present",
-      analysis:
-        "힙합 계열은 리듬과 발화의 밀도를 통해 서사적 캐릭터를 구축한다. 비트 선택과 보컬 톤의 대비가 시대성을 드러내는 핵심 축으로 작동한다.",
-    },
-    rnb: {
-      era: "1990s-2000s peak",
-      analysis:
-        "R&B는 보컬 디테일과 그루브 중심 편곡을 통해 감정선의 미세한 변화를 전달한다. 현대 R&B에서는 전자음향과 미니멀 리듬을 결합한 질감이 특징적으로 나타난다.",
-    },
-    electronic: {
-      era: "1990s-present",
-      analysis:
-        "전자음악 기반 장르는 사운드 디자인 자체를 서사의 중심에 두는 경향이 강하다. 클럽 미학과 실험성이 교차하며 트랙의 질감 변화가 핵심 청취 포인트가 된다.",
-    },
-    kpop: {
-      era: "2010s-present",
-      analysis:
-        "K-pop 문법은 퍼포먼스 구조와 멀티장르 편곡을 결합해 곡 단위 임팩트를 극대화한다. 글로벌 유통 환경에 맞춘 훅 중심 구성과 시각적 콘셉트 연동이 중요한 특징이다.",
-    },
-    jazz: {
-      era: "1940s-1960s peak",
-      analysis:
-        "재즈 계열은 화성과 리듬의 변주를 통해 즉흥적 긴장감을 조직한다. 현대 맥락에서는 팝/힙합과의 융합을 통해 청취 진입 장벽을 낮추는 경향이 나타난다.",
-    },
+    pop: { era: "1960s-present" },
+    rock: { era: "1970s-1990s peak" },
+    hiphop: { era: "1990s-present" },
+    "hip hop": { era: "1990s-present" },
+    rnb: { era: "1990s-2000s peak" },
+    electronic: { era: "1990s-present" },
+    kpop: { era: "2010s-present" },
+    jazz: { era: "1940s-1960s peak" },
   };
   if (table[key]) {
     return table[key];
   }
-  return {
-    era: "varies by region/era",
-    analysis:
-      `${artistName || "이 아티스트"}의 장르 표기는 지역 신(scene)과 시기에 따라 해석 폭이 달라진다. 대표작의 편곡/보컬/리듬 선택을 함께 보면 장르 맥락을 더 정확히 파악할 수 있다.`,
-  };
+  return { era: "varies by region/era" };
 }
 
 function buildSpotifySearchUrl(query) {
@@ -1034,12 +973,12 @@ function buildAcademicArtistSignature({ artistName, summary }) {
   return `${base} 이 아티스트의 미학은 장르의 경계를 고정하기보다 사운드 문법을 갱신하는 방식으로 작동한다. 평단은 작품 간 연속성과 단절의 배치를 통해 시대적 감수성을 조직한다는 점을 주목한다. 따라서 학습 과정에서는 대표작 단위가 아니라 시기별 앨범군의 변화를 구조적으로 읽는 접근이 적절하다.`;
 }
 
-async function buildArtistSignatureProfile({
+async function buildArtistAboutProfile({
   artistName,
   referenceWork,
   artistSummary,
 }) {
-  const fallback = buildFallbackArtistProfile({
+  const fallback = buildFallbackArtistAbout({
     artistName,
     referenceWork,
     artistSummary,
@@ -1051,10 +990,11 @@ async function buildArtistSignatureProfile({
 
   try {
     const prompt = [
-      "당신은 음악연구 조교수다.",
-      "아래 아티스트에 대해 학술 톤 50%, 쉬운 톤 50%의 한국어 요약을 작성하라.",
-      "기존보다 짧게, 각 항목은 정확히 3문장으로 구성하라.",
-      "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
+      "당신은 음악 잡지의 에디터다.",
+      "아래 아티스트를 나무위키처럼 읽기 쉬운 한국어 톤으로 정리하라.",
+      "너무 학술적으로 쓰지 말고, 이해하기 쉬운 설명 위주로 작성하라.",
+      "항목: overview, activity, influence",
+      "각 항목은 2~3문장으로 작성하라.",
       "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
       `아티스트: ${artistName}`,
       `대표 참고작: ${referenceWork || "n/a"}`,
@@ -1085,32 +1025,24 @@ async function buildArtistSignatureProfile({
     }
 
     return {
-      style: ensureSentenceCount(parsed.style, 3) || fallback.style,
-      themes: ensureSentenceCount(parsed.themes, 3) || fallback.themes,
-      form: ensureSentenceCount(parsed.form, 3) || fallback.form,
-      criticalReception:
-        ensureSentenceCount(parsed.criticalReception, 3) || fallback.criticalReception,
-      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 3) || fallback.landmarkWorks,
-      studyGuide: ensureSentenceCount(parsed.studyGuide, 3) || fallback.studyGuide,
+      overview: ensureSentenceCount(parsed.overview, 2) || fallback.overview,
+      activity: ensureSentenceCount(parsed.activity, 2) || fallback.activity,
+      influence: ensureSentenceCount(parsed.influence, 2) || fallback.influence,
     };
   } catch (_error) {
     return fallback;
   }
 }
 
-function buildFallbackArtistProfile({ artistName, referenceWork, artistSummary }) {
+function buildFallbackArtistAbout({ artistName, referenceWork, artistSummary }) {
   const artist = artistName || "이 아티스트";
   const work = referenceWork || "대표작";
-  const summaryHead =
-    firstSentence(artistSummary) || `${artist}는 장르 실험과 시대 감수성의 결합으로 평가된다.`;
+  const summaryHead = firstSentence(artistSummary) || `${artist}는 대중성과 음악성을 동시에 인정받는 아티스트다.`;
 
   return {
-    style: `${summaryHead} 핵심은 익숙한 장르 문법을 가져와 새로운 질감으로 다시 조합하는 데 있다. 어렵게 들릴 수 있지만, 실제 청취 포인트는 보컬 톤과 리듬 대비를 먼저 잡으면 이해가 빠르다.`,
-    themes: `${artist}의 주제는 정체성, 관계, 시대 감정처럼 개인과 사회가 만나는 지점에 집중된다. 가사와 사운드가 같은 메시지를 다른 방식으로 반복해 듣는 사람이 맥락을 쉽게 따라가게 만든다. 그래서 작품을 들을 때 키워드가 트랙마다 어떻게 변주되는지 확인하면 좋다.`,
-    form: `${artist}는 한 곡의 완결성보다 앨범 전체 흐름을 설계하는 방식을 자주 택한다. 곡 배치와 사운드 밀도 변화가 이야기의 긴장과 완급을 만든다. 즉 형식은 장식이 아니라 감정 전달 구조로 기능한다.`,
-    criticalReception: `${artist}에 대한 평가는 대체로 장르 확장과 사운드 실험의 지속성에 높은 점수를 준다. 동시에 일부 평론은 난해함이나 대중 접근성의 한계를 지적한다. 종합하면, 영향력은 크지만 해석 난이도는 청자에 따라 갈린다는 평가가 많다.`,
-    landmarkWorks: `${artist}의 대표작은 시기별 미학 변화를 가장 선명하게 보여주는 기준점이다. ${work}는 그 전환을 확인하기 좋은 입문용 사례로 자주 언급된다. 초기-중기-후기를 비교하면 같은 문제의식이 어떤 사운드로 달라지는지 빠르게 파악할 수 있다.`,
-    studyGuide: `먼저 ${work}를 중심으로 트랙 순서와 사운드 층을 메모하며 들어보면 기본 문법을 잡기 쉽다. 다음으로 전후기 작품을 비교해 무엇이 유지되고 무엇이 바뀌는지 확인한다. 마지막으로 인터뷰나 평론을 함께 보면 청취 경험과 비평 언어를 연결하기 쉬워진다.`,
+    overview: `${summaryHead} 대표작을 들어보면 멜로디와 사운드의 개성이 선명하고, 장르를 자신의 방식으로 풀어내는 힘이 크다.`,
+    activity: `${artist}는 ${work} 전후 시기에 커리어의 방향을 넓히며 활동 폭을 키웠다. 협업, 라이브, 앨범 단위 작업을 통해 음악적 존재감을 꾸준히 쌓아왔다.`,
+    influence: `${artist}의 보컬과 프로덕션 접근은 후배 아티스트들이 자주 참고하는 기준점이 된다. 입문자는 대표곡과 대표 앨범부터 보면 흐름을 빠르게 이해할 수 있다.`,
   };
 }
 

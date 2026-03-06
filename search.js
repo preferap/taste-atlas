@@ -265,24 +265,74 @@ function renderDetail(node) {
     const items = Array.isArray(section.items) ? section.items : [];
     if (items.length) {
       const list = document.createElement("ul");
-      items.forEach((item) => {
-        const li = document.createElement("li");
-        if (item.url) {
-          const a = document.createElement("a");
-          a.href = item.url;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.textContent = item.label || item.name || "";
-          li.appendChild(a);
-        } else {
-          li.textContent = item.label || item.name || "";
+      const isAlbums = normalizeText(section.title).includes("album");
+      const visibleLimit = isAlbums ? 10 : items.length;
+      items.forEach((item, index) => {
+        const li = renderConnectedItem(item);
+        if (isAlbums && index >= visibleLimit) {
+          li.classList.add("hidden");
+          li.dataset.collapsed = "true";
         }
         list.appendChild(li);
       });
       wrapper.appendChild(list);
+      if (isAlbums && items.length > visibleLimit) {
+        const moreButton = document.createElement("button");
+        moreButton.type = "button";
+        moreButton.className = "more-toggle";
+        moreButton.textContent = "[더보기]";
+        moreButton.addEventListener("click", () => {
+          const hiddenItems = list.querySelectorAll("li[data-collapsed='true']");
+          hiddenItems.forEach((li) => li.classList.remove("hidden"));
+          moreButton.remove();
+        });
+        wrapper.appendChild(moreButton);
+      }
     }
     detailConnectedSectionsEl.appendChild(wrapper);
   });
+}
+
+function renderConnectedItem(item) {
+  const li = document.createElement("li");
+  const labelText = item?.label || item?.name || "";
+
+  if (item?.imageUrl) {
+    const card = document.createElement("div");
+    card.className = "album-item";
+    const image = document.createElement("img");
+    image.className = "album-item-poster";
+    image.alt = "album cover";
+    image.src = item.imageUrl;
+    card.appendChild(image);
+    const textWrap = document.createElement("div");
+    textWrap.className = "album-item-text";
+    if (item.url) {
+      const a = document.createElement("a");
+      a.href = item.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = labelText;
+      textWrap.appendChild(a);
+    } else {
+      textWrap.textContent = labelText;
+    }
+    card.appendChild(textWrap);
+    li.appendChild(card);
+    return li;
+  }
+
+  if (item?.url) {
+    const a = document.createElement("a");
+    a.href = item.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = labelText;
+    li.appendChild(a);
+  } else {
+    li.textContent = labelText;
+  }
+  return li;
 }
 
 function updateResultHeadings() {
@@ -330,10 +380,9 @@ function normalizeText(value) {
 function sanitizeMusicSections(sections) {
   const expectedTitles = [
     "Artists",
-    "Artist Signatures",
-    "Album",
-    "Discography Highlights",
-    "Genres + Era",
+    "About",
+    "Albums",
+    "Genres & Era",
   ];
   const byTitle = new Map(
     (Array.isArray(sections) ? sections : []).map((section) => [String(section.title || ""), section])
@@ -354,11 +403,13 @@ function sanitizeMusicSections(sections) {
   );
   const artistMatch = flat
     .map((item) => String(item.label || ""))
-    .find((label) => /^Artist:\s*/i.test(label));
-  const artistName = artistMatch ? artistMatch.replace(/^Artist:\s*/i, "").trim() : "n/a";
+    .find((label) => /^Artist:\s*|^Primary Artist:\s*/i.test(label));
+  const artistName = artistMatch
+    ? artistMatch.replace(/^Artist:\s*|^Primary Artist:\s*/i, "").trim()
+    : "n/a";
 
-  const signatureItems = flat.filter((item) =>
-    /style:|themes:|form:|critical reception:|landmark works:|study guide:/i.test(
+  const aboutItems = flat.filter((item) =>
+    /style:|themes:|form:|critical reception:|landmark works:|study guide:|개요|활동|영향/i.test(
       String(item.label || "")
     )
   );
@@ -382,19 +433,15 @@ function sanitizeMusicSections(sections) {
       items: [{ label: `Primary Artist: ${artistName}`, url: "" }],
     },
     {
-      title: "Artist Signatures",
-      items: sanitizeMusicItems(signatureItems).slice(0, 6),
+      title: "About",
+      items: sanitizeMusicItems(aboutItems).slice(0, 6),
     },
     {
-      title: "Album",
-      items: sanitizeMusicItems(albumItems).slice(0, 6),
+      title: "Albums",
+      items: sanitizeMusicItems([...albumItems, ...discographyItems]).slice(0, 20),
     },
     {
-      title: "Discography Highlights",
-      items: sanitizeMusicItems(discographyItems).slice(0, 10),
-    },
-    {
-      title: "Genres + Era",
+      title: "Genres & Era",
       items: sanitizeMusicItems(genreItems).slice(0, 10),
     },
   ].map((section) => ({

@@ -330,6 +330,35 @@ ul {
   color: var(--fg);
 }
 
+.more-toggle {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.album-item {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.album-item-poster {
+  width: 44px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #f2f2f2;
+}
+
+.album-item-text {
+  min-width: 0;
+}
+
 .search-results {
   border-top: 1px solid var(--line);
   padding-top: 12px;
