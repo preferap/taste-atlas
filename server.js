@@ -7,11 +7,11 @@ const port = process.env.PORT || 5500;
 
 loadEnvFile();
 
-app.use(express.static(__dirname, { index: false }));
-
-app.get("/", (_req, res) => {
+app.get(["/", "/index.html"], (_req, res) => {
   res.sendFile(path.join(__dirname, "map.html"));
 });
+
+app.use(express.static(__dirname, { index: false }));
 
 app.get("/api/health", (_req, res) => {
   res.json({
