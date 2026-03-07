@@ -171,7 +171,20 @@ async function searchMovieCandidates(query) {
       _popularity: Number(person.popularity || 0),
     }));
 
-  const rankedMovie = rankCandidatesByRelevance(movieCandidates, query, (c) => c._popularity || 0);
+  const boostedDirectedMovies = (
+    await Promise.all(
+      directorCandidates.slice(0, 2).map((director) => fetchDirectedMoviesByPerson(director, query))
+    )
+  )
+    .flat()
+    .slice(0, 8);
+
+  const mergedMovies = dedupeCandidates([...movieCandidates, ...boostedDirectedMovies]);
+  const rankedMovie = rankCandidatesByRelevance(
+    mergedMovies,
+    query,
+    (c) => Number(c._popularity || 0) + Number(c._queryBoost || 0)
+  );
   const rankedDirector = rankCandidatesByRelevance(
     directorCandidates,
     query,
@@ -186,6 +199,37 @@ async function searchMovieCandidates(query) {
     : [...rankedMovie, ...rankedDirector];
   const cleaned = ordered.map(({ _popularity, _matchScore, _extraScore, ...candidate }) => candidate);
   return dedupeCandidates(cleaned);
+}
+
+async function fetchDirectedMoviesByPerson(directorCandidate, query) {
+  if (!directorCandidate?.id || !process.env.TMDB_API_KEY) {
+    return [];
+  }
+  const url =
+    `https://api.themoviedb.org/3/discover/movie?` +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      language: "ko-KR",
+      with_crew: String(directorCandidate.id),
+      sort_by: "popularity.desc",
+      include_adult: "false",
+      page: "1",
+    });
+  const response = await fetch(url);
+  if (!response.ok) {
+    return [];
+  }
+  const data = await response.json();
+  const directorName = directorCandidate.title;
+  return (data?.results || []).slice(0, 6).map((movie) => ({
+    id: String(movie.id),
+    kind: "movie",
+    title: movie.title,
+    subtitle: `${movie.release_date || "n/a"} · Directed by ${directorName}`,
+    posterUrl: tmdbImageUrl(movie.poster_path, "w185"),
+    _popularity: Number(movie.popularity || 0) + 15,
+    _queryBoost: normalizeText(directorName).includes(normalizeText(query)) ? 30 : 0,
+  }));
 }
 
 async function searchMusicCandidates(query) {
@@ -1066,9 +1110,11 @@ async function buildDirectorSignatureProfile({
 
   try {
     const prompt = [
-      "당신은 영화연구 조교수다.",
-      "아래 감독에 대해 학술 톤 50%, 쉬운 톤 50%의 한국어 요약을 작성하라.",
-      "기존보다 짧게, 각 항목은 정확히 3문장으로 구성하라.",
+      "당신은 나무위키 문체로 글을 쓰는 에디터다.",
+      "아래 감독에 대해 아주 쉽게 읽히는 한국어 요약을 작성하라.",
+      "중학생도 이해할 수 있게, 어려운 용어와 학술 표현은 쓰지 마라.",
+      "문장은 짧게 쓰고 핵심만 전달하라.",
+      "각 항목은 2~3문장으로 작성하라.",
       "항목: style, themes, form, criticalReception, landmarkWorks, studyGuide",
       "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
       `감독: ${directorName}`,
@@ -1101,13 +1147,13 @@ async function buildDirectorSignatureProfile({
     }
 
     return {
-      style: ensureSentenceCount(parsed.style, 3) || fallback.style,
-      themes: ensureSentenceCount(parsed.themes, 3) || fallback.themes,
-      form: ensureSentenceCount(parsed.form, 3) || fallback.form,
+      style: ensureReadableSentenceCount(parsed.style, 2) || fallback.style,
+      themes: ensureReadableSentenceCount(parsed.themes, 2) || fallback.themes,
+      form: ensureReadableSentenceCount(parsed.form, 2) || fallback.form,
       criticalReception:
-        ensureSentenceCount(parsed.criticalReception, 3) || fallback.criticalReception,
-      landmarkWorks: ensureSentenceCount(parsed.landmarkWorks, 3) || fallback.landmarkWorks,
-      studyGuide: ensureSentenceCount(parsed.studyGuide, 3) || fallback.studyGuide,
+        ensureReadableSentenceCount(parsed.criticalReception, 2) || fallback.criticalReception,
+      landmarkWorks: ensureReadableSentenceCount(parsed.landmarkWorks, 2) || fallback.landmarkWorks,
+      studyGuide: ensureReadableSentenceCount(parsed.studyGuide, 2) || fallback.studyGuide,
     };
   } catch (_error) {
     return fallback;
@@ -1122,16 +1168,16 @@ function buildFallbackDirectorProfile({
 }) {
   const director = directorName || "이 감독";
   const film = movieTitle || "해당 작품";
-  const directorHead = firstSentence(directorSummary) || `${director}는 장르 혼합과 정교한 연출 전략으로 논의된다.`;
-  const movieHead = firstSentence(movieSummary) || `${film}는 사회적 맥락과 서사적 장치를 함께 제시한다.`;
+  const directorHead = firstSentence(directorSummary) || `${director}은(는) 뚜렷한 연출 색으로 유명한 감독이다.`;
+  const movieHead = firstSentence(movieSummary) || `${film}는 이 감독의 스타일을 잘 보여주는 대표작이다.`;
 
   return {
-    style: `${directorHead} 연출의 핵심은 장면 리듬과 인물 배치를 통해 감정선을 단계적으로 쌓는 방식이다. 전문적으로 보면 미장센의 통제력이 강하고, 관객 입장에서는 장면 전환이 명확해 몰입이 쉽다.`,
-    themes: `${movieHead} 반복되는 주제는 권력, 욕망, 불안처럼 사회와 개인이 충돌하는 지점에 모인다. 인물의 선택이 서사 긴장을 만들기 때문에 사건보다 관계 변화를 따라가며 보면 이해가 빨라진다. 이 점이 국내외 관객에게 폭넓게 통하는 이유로 자주 언급된다.`,
-    form: `${director}는 설명을 줄이고 이미지와 소리로 의미를 쌓는 형식을 선호한다. 컷 전환과 침묵의 사용이 서사의 전환점을 자연스럽게 강조한다. 결과적으로 형식은 줄거리 전달을 넘어서 해석 방향을 안내하는 장치가 된다.`,
-    criticalReception: `${director}에 대한 평가는 완성도와 장르 운용 능력에 높은 점수를 주는 편이다. 다만 일부 평론은 상징의 직접성이나 과잉 해석 가능성을 한계로 지적한다. 전반적으로는 대중성과 비평성을 동시에 확보했다는 합의가 강하다.`,
-    landmarkWorks: `${director}의 대표작은 시기별 문제의식과 연출 전략의 변화를 보여주는 기준점이다. ${film}는 그중에서도 서사 구조와 사회적 해석이 잘 맞물린 사례로 자주 인용된다. 다른 작품과 함께 보면 같은 주제가 어떻게 변주되는지 선명해진다.`,
-    studyGuide: `먼저 ${film}를 보며 인물 관계와 공간 이동을 간단히 도식화해 기본 구조를 잡는다. 다음으로 전후기 작품을 비교해 주제와 형식의 유지/변화를 체크한다. 마지막으로 평론과 인터뷰를 함께 읽으면 해석의 폭을 안정적으로 넓힐 수 있다.`,
+    style: `${directorHead} 화면 구성과 장면 분위기를 만드는 감각이 좋아서, 한 번 보면 감독 색이 잘 기억된다.`,
+    themes: `${movieHead} 보통 사람 사이의 갈등, 선택, 관계 변화 같은 주제를 꾸준히 다룬다.`,
+    form: `${director}의 영화는 장면 전환이 명확하고 흐름이 잘 잡혀 있어서 따라가기 편한 편이다.`,
+    criticalReception: `${director}은(는) 완성도와 연출력에서 좋은 평가를 자주 받는다. 다만 취향에 따라 전개 속도나 분위기는 호불호가 갈릴 수 있다.`,
+    landmarkWorks: `${director}의 대표작 몇 편만 봐도 어떤 스타일의 감독인지 감이 빠르게 잡힌다. ${film}는 입문용으로 보기 좋은 작품이다.`,
+    studyGuide: `처음에는 대표작 1편을 보고, 마음에 들면 같은 감독 작품 2~3편을 이어서 보는 방식이 가장 쉽다. 비슷한 주제나 연출 포인트를 메모하면 감독의 색이 더 잘 보인다.`,
   };
 }
 
@@ -1208,7 +1254,7 @@ function ensureReadableSentenceCount(text, minSentences) {
   }
   const pad = [...parts];
   while (pad.length < minSentences) {
-    pad.push("쉽게 말하면 이 아티스트의 특징이 분명하다는 뜻이다.");
+    pad.push("쉽게 말하면 핵심 특징이 분명하다는 뜻이다.");
   }
   return pad.join(" ");
 }
