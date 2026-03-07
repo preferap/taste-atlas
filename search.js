@@ -117,6 +117,9 @@ function renderCandidateList(container, items) {
     image.alt = "candidate image";
     if (candidate.posterUrl) {
       image.src = candidate.posterUrl;
+      attachImageFallback(image, candidate.title || "no cover");
+    } else {
+      image.src = buildPlaceholderCoverDataUrl(candidate.title || "no cover");
     }
 
     const main = document.createElement("div");
@@ -220,6 +223,7 @@ function renderDetail(node) {
 
   if (node.posterUrl) {
     detailPosterEl.src = node.posterUrl;
+    attachImageFallback(detailPosterEl, node.title || "no cover");
     detailPosterEl.classList.remove("hidden");
   } else {
     detailPosterEl.removeAttribute("src");
@@ -304,6 +308,7 @@ function renderConnectedItem(item) {
     image.className = "album-item-poster";
     image.alt = "album cover";
     image.src = item.imageUrl;
+    attachImageFallback(image, labelText || "no cover");
     card.appendChild(image);
     const textWrap = document.createElement("div");
     textWrap.className = "album-item-text";
@@ -333,6 +338,45 @@ function renderConnectedItem(item) {
     li.textContent = labelText;
   }
   return li;
+}
+
+function attachImageFallback(imageEl, titleText) {
+  if (!imageEl) {
+    return;
+  }
+  imageEl.addEventListener(
+    "error",
+    () => {
+      imageEl.src = buildPlaceholderCoverDataUrl(titleText || "no cover");
+    },
+    { once: true }
+  );
+}
+
+function buildPlaceholderCoverDataUrl(titleText) {
+  const token = String(titleText || "NO COVER")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 28)
+    .toUpperCase();
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='240' height='360'>
+    <rect width='100%' height='100%' fill='#e6e6e6'/>
+    <rect x='12' y='12' width='216' height='336' fill='none' stroke='#bcbcbc'/>
+    <text x='50%' y='48%' text-anchor='middle' fill='#666' font-family='Helvetica, Arial, sans-serif' font-size='16'>NO COVER</text>
+    <text x='50%' y='55%' text-anchor='middle' fill='#888' font-family='Helvetica, Arial, sans-serif' font-size='11'>${escapeXml(
+      token
+    )}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeXml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function updateResultHeadings() {
