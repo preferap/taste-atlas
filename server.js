@@ -7,6 +7,13 @@ const port = process.env.PORT || 5500;
 
 loadEnvFile();
 
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
+
 app.get(["/", "/index.html"], (_req, res) => {
   res.sendFile(path.join(__dirname, "map.html"));
 });
