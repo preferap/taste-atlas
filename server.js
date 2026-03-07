@@ -464,34 +464,32 @@ async function lookupMovie({ q, candidateId, candidateKind }) {
   });
 
   const awardItems = awards.length
-    ? awards.map((award) => ({ label: award, url: buildKnowledgeUrl(award) }))
-    : [{ label: "No award records found in open data.", url: "" }];
-  const awardArticleItems = awards.length
-    ? await fetchAwardArticles({
-        movieTitle: detail.title || q || "",
-        directorName: director?.name || "",
-        awards,
-      })
+    ? awards.map((award) => ({ label: `수상: ${award}`, url: buildKnowledgeUrl(award) }))
     : [];
+  const awardArticleItems = await fetchAwardArticles({
+    movieTitle: detail.title || q || "",
+    directorName: director?.name || "",
+    awards,
+  });
 
   const connectedSections = [
-    { title: "1) Credits", groups: creditGroups, items: [] },
-    { title: "2) Genres", items: genreItems.slice(0, 10) },
+    { title: "Credits", groups: creditGroups, items: [] },
     {
-      title: "3) Director Signatures",
+      title: "Director Signature",
       items: [
-        { label: `Style: ${directorSignatureProfile.style}`, url: "" },
-        { label: `Themes: ${directorSignatureProfile.themes}`, url: "" },
-        { label: `Form: ${directorSignatureProfile.form}`, url: "" },
-        { label: `Critical Reception: ${directorSignatureProfile.criticalReception}`, url: "" },
-        { label: `Landmark Works: ${directorSignatureProfile.landmarkWorks}`, url: "" },
-        { label: `Study Guide: ${directorSignatureProfile.studyGuide}`, url: "" },
+        { label: `연출 톤\n${directorSignatureProfile.style}`, url: "" },
+        { label: `자주 다루는 주제\n${directorSignatureProfile.themes}`, url: "" },
+        { label: `장면 구성 방식\n${directorSignatureProfile.form}`, url: "" },
+        { label: `평단 반응\n${directorSignatureProfile.criticalReception}`, url: "" },
+        { label: `대표작 포인트\n${directorSignatureProfile.landmarkWorks}`, url: "" },
+        { label: `감상 가이드\n${directorSignatureProfile.studyGuide}`, url: "" },
       ],
     },
+    { title: "Genres", items: genreItems.slice(0, 10) },
     {
-      title: "4) Awards",
+      title: "Awards",
       items: [
-        ...awardItems.slice(0, 10),
+        ...(awardItems.length ? awardItems.slice(0, 10) : [{ label: "수상 DB 항목은 확인되지 않았습니다.", url: "" }]),
         ...awardArticleItems.slice(0, 3),
       ],
     },
@@ -1260,36 +1258,45 @@ function ensureReadableSentenceCount(text, minSentences) {
 }
 
 async function fetchAwardArticles({ movieTitle, directorName, awards }) {
-  const queryTerms = [movieTitle, directorName, ...awards.slice(0, 2)]
-    .filter(Boolean)
-    .join(" ");
-  if (!queryTerms) {
+  const baseTitle = String(movieTitle || "").trim();
+  if (!baseTitle) {
     return [];
   }
+  const queries = [
+    `${baseTitle} 수상`,
+    `${baseTitle} 영화제 수상`,
+    `${baseTitle} award`,
+    directorName ? `${baseTitle} ${directorName} 수상` : "",
+    ...awards.slice(0, 2).map((award) => `${baseTitle} ${award}`),
+  ].filter(Boolean);
 
-  const rssUrl =
-    "https://news.google.com/rss/search?" +
-    new URLSearchParams({
-      q: `${queryTerms} award`,
-      hl: "ko",
-      gl: "KR",
-      ceid: "KR:ko",
-    });
-
-  try {
-    const response = await fetch(rssUrl);
-    if (!response.ok) {
-      return [];
-    }
-    const xml = await response.text();
-    const items = rankAndFilterNewsItems(parseGoogleNewsRss(xml)).slice(0, 3);
-    return items.map((item) => ({
-      label: `Article: ${item.title}`,
-      url: item.link,
-    }));
-  } catch (_error) {
-    return [];
-  }
+  const buckets = await Promise.all(
+    queries.map(async (query) => {
+      const rssUrl =
+        "https://news.google.com/rss/search?" +
+        new URLSearchParams({
+          q: query,
+          hl: "ko",
+          gl: "KR",
+          ceid: "KR:ko",
+        });
+      try {
+        const response = await fetch(rssUrl);
+        if (!response.ok) {
+          return [];
+        }
+        const xml = await response.text();
+        return parseGoogleNewsRss(xml);
+      } catch {
+        return [];
+      }
+    })
+  );
+  const items = rankAndFilterNewsItems(buckets.flat()).slice(0, 3);
+  return items.map((item) => ({
+    label: `수상 기사: ${item.title}`,
+    url: item.link,
+  }));
 }
 
 async function fetchAwardArticlesForMusic({ artistName, awards }) {
