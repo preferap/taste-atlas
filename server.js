@@ -321,25 +321,35 @@ async function lookupMovie({ q, candidateId, candidateKind }) {
   }
 
   let movie = null;
+  let directorId = 0;
   let searchMode = "title";
   let directorRef = null;
 
   if (candidateKind === "movie" && candidateId) {
     movie = { id: Number(candidateId) };
   } else if (candidateKind === "director" && candidateId) {
-    movie = await findTopDirectedMovie(Number(candidateId));
-    directorRef = await getTmdbPerson(Number(candidateId));
+    directorId = Number(candidateId);
+    directorRef = await getTmdbPerson(directorId);
     searchMode = "director";
   } else {
     const candidates = await searchMovieCandidates(q);
     const first = candidates[0];
     if (first?.kind === "director") {
-      movie = await findTopDirectedMovie(Number(first.id));
-      directorRef = await getTmdbPerson(Number(first.id));
+      directorId = Number(first.id);
+      directorRef = await getTmdbPerson(directorId);
       searchMode = "director";
     } else if (first?.kind === "movie") {
       movie = { id: Number(first.id) };
     }
+  }
+
+  if (directorId) {
+    return lookupDirector({
+      directorId,
+      q,
+      directorRef,
+      searchMode,
+    });
   }
 
   if (!movie?.id) {
@@ -511,6 +521,98 @@ async function lookupMovie({ q, candidateId, candidateKind }) {
     ],
     connectedSections,
     posterUrl: tmdbImageUrl(detail.poster_path, "w500"),
+  };
+}
+
+async function lookupDirector({ directorId, q, directorRef, searchMode }) {
+  const director = directorRef || (await getTmdbPerson(directorId));
+  if (!director?.id) {
+    return {
+      title: q || "director",
+      type: "movie",
+      desc: "감독 정보를 찾지 못했습니다.",
+      path: [],
+      links: [],
+      connectedSections: [],
+      posterUrl: "",
+    };
+  }
+
+  const creditsUrl =
+    `https://api.themoviedb.org/3/person/${director.id}/movie_credits?` +
+    new URLSearchParams({
+      api_key: process.env.TMDB_API_KEY,
+      language: "ko-KR",
+    });
+  const creditsResponse = await fetch(creditsUrl);
+  const credits = creditsResponse.ok ? await creditsResponse.json() : {};
+  const directedMovies = (credits?.crew || [])
+    .filter((item) => item.job === "Director")
+    .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  const leadMovie = directedMovies[0] || null;
+
+  const directorSummaryRaw = await fetchWikipediaSummary(director.name, { languages: ["ko", "en"] });
+  const directorSummary = await summarizeToKorean(
+    directorSummaryRaw || director.biography || "",
+    `영화감독 ${director.name} 소개`
+  );
+
+  const directorSignatureProfile = await buildDirectorSignatureProfile({
+    directorName: director.name || "",
+    movieTitle: leadMovie?.title || q || "",
+    directorSummary: directorSummary || director.biography || "",
+    movieSummary: "",
+  });
+
+  const creditGroups = [
+    {
+      title: "감독 기본정보",
+      items: [
+        { label: `이름: ${director.name || "n/a"}`, url: buildKnowledgeUrl(director.name || "") },
+        { label: `생년월일: ${director.birthday || "n/a"}`, url: "" },
+        { label: `출생지: ${director.place_of_birth || "n/a"}`, url: "" },
+        { label: `대표 분야: ${director.known_for_department || "Directing"}`, url: "" },
+      ],
+    },
+    {
+      title: "대표 연출작",
+      items: directedMovies.slice(0, 10).map((movie) => ({
+        label: `${movie.title} (${movie.release_date || "n/a"})`,
+        url: buildKnowledgeUrl(movie.title),
+      })),
+    },
+  ];
+
+  const connectedSections = [
+    { title: "Credits", groups: creditGroups, items: [] },
+    {
+      title: "Director Signature",
+      items: [
+        { label: `연출 톤\n${directorSignatureProfile.style}`, url: "" },
+        { label: `자주 다루는 주제\n${directorSignatureProfile.themes}`, url: "" },
+        { label: `장면 구성 방식\n${directorSignatureProfile.form}`, url: "" },
+        { label: `평단 반응\n${directorSignatureProfile.criticalReception}`, url: "" },
+        { label: `대표작 포인트\n${directorSignatureProfile.landmarkWorks}`, url: "" },
+        { label: `감상 가이드\n${directorSignatureProfile.studyGuide}`, url: "" },
+      ],
+    },
+  ];
+
+  return {
+    title: director.name || q || "director",
+    type: "movie",
+    desc:
+      directorSummary ||
+      director.biography ||
+      `${director.name || "감독"}은(는) 다양한 작품을 연출한 영화감독이다.`,
+    path: [],
+    links: [
+      `Search mode: ${searchMode || "director"}`,
+      `Known for: ${director.known_for_department || "Directing"}`,
+      "Source: TMDB",
+    ],
+    connectedSections,
+    posterUrl: tmdbImageUrl(director.profile_path, "w500"),
   };
 }
 
