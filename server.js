@@ -990,9 +990,10 @@ async function buildArtistAboutProfile({
 
   try {
     const prompt = [
-      "당신은 음악 잡지의 에디터다.",
-      "아래 아티스트를 나무위키처럼 읽기 쉬운 한국어 톤으로 정리하라.",
-      "너무 학술적으로 쓰지 말고, 이해하기 쉬운 설명 위주로 작성하라.",
+      "당신은 나무위키 문체로 글을 쓰는 에디터다.",
+      "아래 아티스트를 아주 쉽게 읽히는 한국어로 정리하라.",
+      "중학생도 바로 이해할 수 있게, 어려운 용어와 학술 표현은 쓰지 마라.",
+      "문장은 짧게 쓰고, 핵심만 담아라.",
       "항목: overview, activity, influence",
       "각 항목은 2~3문장으로 작성하라.",
       "JSON만 반환하고 다른 텍스트는 쓰지 마라.",
@@ -1025,9 +1026,9 @@ async function buildArtistAboutProfile({
     }
 
     return {
-      overview: ensureSentenceCount(parsed.overview, 2) || fallback.overview,
-      activity: ensureSentenceCount(parsed.activity, 2) || fallback.activity,
-      influence: ensureSentenceCount(parsed.influence, 2) || fallback.influence,
+      overview: ensureReadableSentenceCount(parsed.overview, 2) || fallback.overview,
+      activity: ensureReadableSentenceCount(parsed.activity, 2) || fallback.activity,
+      influence: ensureReadableSentenceCount(parsed.influence, 2) || fallback.influence,
     };
   } catch (_error) {
     return fallback;
@@ -1189,6 +1190,25 @@ function ensureSentenceCount(text, minSentences) {
   const pad = [...parts];
   while (pad.length < minSentences) {
     pad.push("추가적인 학술적 검토가 필요한 지점으로 평가된다.");
+  }
+  return pad.join(" ");
+}
+
+function ensureReadableSentenceCount(text, minSentences) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return "";
+  }
+  const parts = value
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= minSentences) {
+    return parts.join(" ");
+  }
+  const pad = [...parts];
+  while (pad.length < minSentences) {
+    pad.push("쉽게 말하면 이 아티스트의 특징이 분명하다는 뜻이다.");
   }
   return pad.join(" ");
 }
